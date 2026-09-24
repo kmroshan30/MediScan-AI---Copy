@@ -1563,51 +1563,108 @@ if active_feature == "Triage":
 
     st.header(T["tab_triage"])
 
-    symptoms = st.text_area(
-        T["describe_symptoms"],
-        placeholder="Example: I have fever and cough for 3 days..."
-    )
+    # ------------------------------------------------------------
+    # The result is stored in session_state and rendered SEPARATELY
+    # from the Analyze button. Streamlit buttons only return True for
+    # the single run triggered by the click — if the output lived
+    # inside `if st.button(...)` it would vanish on the very next
+    # rerun (any widget change in the sidebar or the form itself),
+    # leaving the user with a fresh empty form. Persisting the result
+    # keeps the analysis on screen, scrollable, until a new one starts.
+    # ------------------------------------------------------------
+    result = st.session_state.get("triage_result")
 
-    age = st.number_input(T["age"], min_value=1, max_value=120, value=22)
+    if result is not None:
+        # ---------------- SHOW THE ANALYSIS RESULT ----------------
+        prediction = result["prediction"]
+        is_emergency = result.get("is_emergency", False)
+        confidence = result.get("confidence")
+        probabilities = result.get("probabilities")
+        classes = result.get("classes")
 
-    duration = st.text_input(
-        T["duration_q"],
-        placeholder="Example: 3 days"
-    )
+        st.subheader("🤖 AI Triage Result")
 
-    severity = st.selectbox(T["severity_q"], ["Mild", "Moderate", "Severe"])
+        if is_emergency or prediction == "Emergency":
+            st.error("🚨 Predicted Urgency: EMERGENCY")
+        elif prediction == "Low":
+            st.success("🟢 Predicted Urgency: LOW")
+        elif prediction == "Moderate":
+            st.warning("🟡 Predicted Urgency: MODERATE")
+        elif prediction == "High":
+            st.error("🔴 Predicted Urgency: HIGH")
+        else:
+            st.info(f"Predicted Urgency: {prediction}")
 
-    if st.button(T["analyze_btn"]):
+        st.markdown(f"**Symptoms entered:**\n\n{result['symptoms']}")
 
-        if symptoms.strip():
+        if is_emergency:
+            st.error(
+                "Emergency symptoms were detected. "
+                "Please seek immediate medical attention "
+                "from a qualified healthcare professional."
+            )
+            st.metric("Safety Override", "Emergency")
 
-            duration_match = re.search(r"\d+", duration)
-            duration_days = int(duration_match.group()) if duration_match else 1
+        if confidence is not None:
+            st.write(f"**AI Confidence:** {confidence:.2f}%")
+            st.progress(min(int(confidence), 100))
 
-            severity_scores = {"Mild": 1, "Moderate": 2, "Severe": 3}
-            severity_score = severity_scores[severity]
+        if probabilities is not None and classes:
+            st.subheader("📊 Urgency Probability")
+            for class_name, probability in zip(classes, probabilities):
+                percentage = probability * 100
+                st.write(f"**{class_name}: {percentage:.2f}%**")
+                st.progress(min(int(percentage), 100))
 
-            input_data = pd.DataFrame({
-                "symptoms": [symptoms],
-                "age": [age],
-                "severity": [severity],
-                "duration_days": [duration_days],
-                "severity_score": [severity_score]
-            })
+        diet_tip = result.get("diet_tip")
+        if diet_tip:
+            st.subheader(T["diet_suggestion_title"])
+            st.info(diet_tip)
+            st.caption(DIET_DISCLAIMER)
 
-            try:
-                loading = st.empty()
-                loading.markdown(
-                    """
-                    <div class="ms-inline-loader">
-                        <div class="ms-loading-content">
-                            <div class="ms-spinner"></div>
-                            <p>Analyzing symptoms...</p>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+        st.caption(
+            "⚠️ This is an educational AI prototype and is "
+            "not a medical diagnosis."
+        )
+
+        if st.button("➕ New Analysis", use_container_width=True):
+            st.session_state.triage_result = None
+            st.rerun()
+
+    else:
+        # ---------------- INPUT FORM ----------------
+        symptoms = st.text_area(
+            T["describe_symptoms"],
+            placeholder="Example: I have fever and cough for 3 days...",
+            height=120
+        )
+
+        age = st.number_input(T["age"], min_value=1, max_value=120, value=22)
+
+        duration = st.text_input(
+            T["duration_q"],
+            placeholder="Example: 3 days"
+        )
+
+        severity = st.selectbox(T["severity_q"], ["Mild", "Moderate", "Severe"])
+
+        if st.button(T["analyze_btn"], use_container_width=True):
+
+            if symptoms.strip():
+
+                duration_match = re.search(r"\d+", duration)
+                duration_days = int(duration_match.group()) if duration_match else 1
+
+                severity_scores = {"Mild": 1, "Moderate": 2, "Severe": 3}
+                severity_score = severity_scores[severity]
+
+                input_data = pd.DataFrame({
+                    "symptoms": [symptoms],
+                    "age": [age],
+                    "severity": [severity],
+                    "duration_days": [duration_days],
+                    "severity_score": [severity_score]
+                })
 
                 symptoms_lower = symptoms.lower()
 
@@ -1616,97 +1673,66 @@ if active_feature == "Triage":
                     for keyword in emergency_keywords
                 )
 
-                if is_emergency:
-                    prediction = "Emergency"
-                    confidence = 100.0
-                    probabilities = None
-                else:
-                    prediction = model.predict(input_data)[0]
-
-                    if hasattr(model, "predict_proba"):
-                        probabilities = model.predict_proba(input_data)[0]
-                        confidence = max(probabilities) * 100
-                    else:
+                try:
+                    if is_emergency:
+                        prediction = "Emergency"
+                        confidence = 100.0
                         probabilities = None
-                        confidence = None
+                        classes = None
+                    else:
+                        prediction = model.predict(input_data)[0]
 
-                loading.empty()
-                st.success("Symptoms analyzed successfully!")
-                st.subheader("🤖 AI Triage Result")
-                st.write(f"**Predicted Urgency:** {prediction}")
+                        if hasattr(model, "predict_proba"):
+                            probabilities = model.predict_proba(input_data)[0]
+                            confidence = max(probabilities) * 100
+                            classes = list(model.classes_)
+                        else:
+                            probabilities = None
+                            confidence = None
+                            classes = None
 
-                if is_emergency:
-                    st.error("Predicted Urgency: EMERGENCY")
-                    st.write(
-                        "Emergency symptoms were detected. "
-                        "Please seek immediate medical attention "
-                        "from a qualified healthcare professional."
+                    # General diet suggestion (only for a few keywords)
+                    matched_tip = None
+                    for keyword, tip in DIET_SUGGESTIONS.items():
+                        if keyword in symptoms_lower:
+                            matched_tip = tip
+                            break
+
+                    # ---- Save this check to the database ----
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """
+                        INSERT INTO triage_history
+                        (user_id, symptoms, age, severity, duration, predicted_urgency)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (st.session_state.user_id, symptoms, age, severity, duration, prediction)
                     )
-                    st.metric("Safety Override", "Emergency")
+                    conn.commit()
+                    conn.close()
+                    log_activity("Symptom assessment", "Triage", str(prediction))
+                    add_notification("New triage report available", "success")
 
-                else:
-                    if confidence is not None:
-                        st.write(f"**AI Confidence:** {confidence:.2f}%")
-                        st.progress(min(int(confidence), 100))
+                    # Persist the result so it survives future reruns and
+                    # can be scrolled/read at leisure.
+                    st.session_state.triage_result = {
+                        "symptoms": symptoms,
+                        "prediction": prediction,
+                        "confidence": confidence,
+                        "probabilities": probabilities,
+                        "classes": classes,
+                        "is_emergency": is_emergency,
+                        "diet_tip": matched_tip,
+                    }
+                    st.rerun()
 
-                    if probabilities is not None:
-                        st.subheader("📊 Urgency Probability")
-                        classes = model.classes_
-                        for class_name, probability in zip(classes, probabilities):
-                            percentage = probability * 100
-                            st.write(f"**{class_name}: {percentage:.2f}%**")
-                            st.progress(min(int(percentage), 100))
+                except Exception as e:
+                    st.error("An error occurred while analyzing the symptoms.")
+                    st.code(str(e))
 
-                if prediction == "Low":
-                    st.success("🟢 Predicted Urgency: LOW")
-                elif prediction == "Moderate":
-                    st.warning("🟡 Predicted Urgency: MODERATE")
-                elif prediction == "High":
-                    st.error("🔴 Predicted Urgency: HIGH")
-                elif prediction == "Emergency":
-                    st.error("Predicted Urgency: EMERGENCY")
-                else:
-                    st.info(f"Predicted Urgency: {prediction}")
-
-                st.caption(
-                    "⚠️ This is an educational AI prototype and is "
-                    "not a medical diagnosis."
-                )
-
-                # ---- General diet suggestion (only for a few keywords) ----
-                matched_tip = None
-                for keyword, tip in DIET_SUGGESTIONS.items():
-                    if keyword in symptoms_lower:
-                        matched_tip = tip
-                        break
-
-                if matched_tip:
-                    st.subheader(T["diet_suggestion_title"])
-                    st.info(matched_tip)
-                    st.caption(DIET_DISCLAIMER)
-
-                # ---- Save this check to the database ----
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO triage_history
-                    (user_id, symptoms, age, severity, duration, predicted_urgency)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (st.session_state.user_id, symptoms, age, severity, duration, prediction)
-                )
-                conn.commit()
-                conn.close()
-                log_activity("Symptom assessment", "Triage", str(prediction))
-                add_notification("New triage report available", "success")
-
-            except Exception as e:
-                st.error("An error occurred while analyzing the symptoms.")
-                st.code(str(e))
-
-        else:
-            st.warning("Please enter your symptoms before analyzing.")
+            else:
+                st.warning("Please enter your symptoms before analyzing.")
 
 # ============================================================
 # TAB 2 — Hospital Finder (district + rating + maps + suggestions)

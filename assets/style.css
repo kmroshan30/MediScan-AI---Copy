@@ -1834,3 +1834,132 @@ section.main:has(.auth-logo-center) .auth-footer{
   .ms-app-logo-row{justify-content:flex-end;}
   .ms-app-logo{width:68px !important;margin-right:2px !important;}
 }
+
+/* ============================================================
+   READABLE INPUT TEXT — FIX
+   ------------------------------------------------------------
+   The app forces WHITE backgrounds on every input box (see the
+   .stTextInput rules above) but never pins down the colour of
+   the text typed into them. When the client/browser theme is
+   dark, Streamlit paints input text white, which makes it
+   literally invisible (white text on white box) on the login
+   page and on every entry field after login.
+
+   The rules below guarantee dark, readable text on the white
+   input boxes everywhere — login/register, sidebar and all
+   feature pages — in light mode AND dark mode.
+   ============================================================ */
+
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input,
+.stDateInput input,
+.stTimeInput input,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input,
+[data-baseweb="input"] input,
+[data-baseweb="input"] textarea,
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] input {
+    color: #102a43 !important;
+    background-color: #ffffff !important;
+    caret-color: #0b7a75 !important;
+    -webkit-text-fill-color: #102a43 !important;
+}
+
+/* Readable placeholder text on the white boxes. */
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder,
+.stNumberInput input::placeholder,
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder,
+[data-testid="stNumberInput"] input::placeholder,
+[data-baseweb="input"] input::placeholder,
+[data-baseweb="input"] textarea::placeholder,
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #6d8290 !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: #6d8290 !important;
+}
+
+/* Select boxes: the chosen value must stay dark on white. */
+[data-baseweb="select"] > div {
+    color: #102a43 !important;
+    background-color: #ffffff !important;
+    -webkit-text-fill-color: #102a43 !important;
+}
+
+[data-baseweb="select"] > div span {
+    color: #102a43 !important;
+    -webkit-text-fill-color: #102a43 !important;
+}
+
+/* Disabled inputs (e.g. read-only profile fields) stay readable. */
+.stTextInput input:disabled,
+.stTextArea textarea:disabled,
+[data-testid="stTextInput"] input:disabled,
+[data-testid="stTextArea"] textarea:disabled {
+    color: #4a5d6a !important;
+    background-color: #f2f6f8 !important;
+    -webkit-text-fill-color: #4a5d6a !important;
+}
+
+/* Dark mode: re-assert the exact same readable colours. The
+   sidebar block above paints * every element white, and the
+   Streamlit dark theme paints input text white. */
+@media (prefers-color-scheme: dark) {
+    .stTextInput input,
+    .stTextArea textarea,
+    .stNumberInput input,
+    .stDateInput input,
+    .stTimeInput input,
+    [data-testid="stTextInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-testid="stTimeInput"] input,
+    [data-baseweb="input"] input,
+    [data-baseweb="input"] textarea,
+    [data-testid="stChatInput"] textarea,
+    [data-testid="stChatInput"] input {
+        color: #102a43 !important;
+        background-color: #ffffff !important;
+        caret-color: #0b7a75 !important;
+        -webkit-text-fill-color: #102a43 !important;
+    }
+
+    .stTextInput input::placeholder,
+    .stTextArea textarea::placeholder,
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stTextArea"] textarea::placeholder,
+    [data-baseweb="input"] input::placeholder,
+    [data-baseweb="input"] textarea::placeholder,
+    [data-testid="stChatInput"] textarea::placeholder {
+        color: #6d8290 !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #6d8290 !important;
+    }
+
+    [data-baseweb="select"] > div {
+        color: #102a43 !important;
+        background-color: #ffffff !important;
+        -webkit-text-fill-color: #102a43 !important;
+    }
+
+    [data-baseweb="select"] > div span {
+        color: #102a43 !important;
+        -webkit-text-fill-color: #102a43 !important;
+    }
+
+    .stTextInput input:disabled,
+    .stTextArea textarea:disabled,
+    [data-testid="stTextInput"] input:disabled,
+    [data-testid="stTextArea"] textarea:disabled {
+        color: #4a5d6a !important;
+        background-color: #f2f6f8 !important;
+        -webkit-text-fill-color: #4a5d6a !important;
+    }
+}
