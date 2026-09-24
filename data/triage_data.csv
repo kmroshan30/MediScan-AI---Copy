@@ -1,0 +1,1001 @@
+symptoms,age,severity,duration,urgency
+fever and cough,36,Mild,2 days,Moderate
+severe abdominal pain,85,Severe,5 days,High
+mild sore throat,30,Mild,7 days,Low
+persistent fatigue with body aches,33,Mild,5 days,Moderate
+persistent vomiting with nausea,30,Severe,5 days,High
+mild sore throat,44,Mild,1 day,Low
+moderate stomach discomfort,82,Mild,3 days,Moderate
+severe abdominal pain with body aches,58,Severe,1 day,High
+persistent severe pain,83,Severe,2 days,High
+mild sore throat with fatigue,38,Mild,1 day,Low
+sudden severe headache with confusion with nausea,40,Severe,6 hours,Emergency
+slight muscle ache,27,Mild,3 days,Low
+moderate sore throat with dizziness,25,Moderate,5 days,Moderate
+minor skin irritation with nausea,72,Mild,2 days,Low
+persistent vomiting with nausea,39,Severe,1 day,High
+persistent cough with nausea,77,Moderate,10 days,Moderate
+occasional cough,51,Mild,5 days,Low
+mild sore throat with body aches,72,Mild,7 days,Low
+worsening symptoms despite rest with nausea,84,Severe,5 days,High
+sneezing,66,Mild,5 days,Low
+severe abdominal pain with dizziness,29,Severe,2 days,High
+mild fever with body aches with body aches,81,Mild,5 days,Moderate
+chest pain,92,Severe,1 day,Emergency
+severe infection-like symptoms with body aches,53,Severe,1 day,High
+persistent nasal congestion,38,Moderate,7 days,Moderate
+persistent cough with fatigue,69,Mild,7 days,Moderate
+sneezing,70,Mild,7 days,Low
+persistent nasal congestion with body aches,19,Moderate,3 days,Moderate
+mild sore throat,73,Mild,1 day,Low
+severe abdominal pain,78,Severe,2 days,High
+high fever with weakness with dizziness,43,Severe,7 days,High
+seizure with body aches,93,Severe,1 hour,Emergency
+sinus pressure and fever with weakness,61,Mild,7 days,Moderate
+mild sore throat,9,Mild,3 days,Low
+moderate headache,5,Moderate,1 day,Moderate
+mild headache with fatigue,43,Mild,1 day,Low
+occasional cough,28,Mild,7 days,Low
+severe dizziness with weakness with dizziness,41,Severe,5 days,High
+runny nose with dizziness,56,Mild,3 days,Low
+persistent fatigue with dizziness,17,Moderate,1 day,Moderate
+severe abdominal pain with fatigue,41,Severe,2 days,High
+moderate sore throat with weakness,28,Mild,3 days,Moderate
+runny nose,57,Mild,7 days,Low
+mild back pain with fatigue,2,Mild,1 day,Low
+occasional cough with dizziness,62,Mild,2 days,Low
+loss of consciousness with dizziness,53,Severe,1 hour,Emergency
+occasional cough with weakness,37,Mild,5 days,Low
+mild cold,28,Mild,1 day,Low
+persistent vomiting with weakness,16,Severe,7 days,High
+vomiting and weakness,12,Moderate,7 days,Moderate
+severe difficulty breathing with fatigue,81,Severe,1 hour,Emergency
+moderate back pain,79,Moderate,7 days,Moderate
+mild fever with body aches with nausea,38,Mild,2 days,Moderate
+mild fatigue with weakness,17,Mild,3 days,Low
+runny nose,2,Mild,5 days,Low
+mild sore throat,65,Mild,3 days,Low
+severe difficulty breathing with body aches,36,Severe,6 hours,Emergency
+mild back pain,39,Mild,7 days,Low
+severe infection-like symptoms with body aches,23,Severe,2 days,High
+runny nose with body aches,71,Mild,2 days,Low
+mild sore throat with body aches,44,Mild,2 days,Low
+ear pain with dizziness,16,Moderate,10 days,Moderate
+persistent vomiting,10,Severe,3 days,High
+ear pain with dizziness,61,Moderate,7 days,Moderate
+persistent cough,24,Moderate,7 days,Moderate
+high fever with weakness,65,Severe,2 days,High
+mild headache with fatigue,46,Mild,2 days,Low
+persistent severe pain,81,Severe,5 days,High
+heavy bleeding with dizziness,25,Severe,1 hour,Emergency
+mild seasonal allergy symptoms with fatigue,43,Mild,5 days,Low
+mild seasonal allergy symptoms,14,Mild,5 days,Low
+heavy bleeding with nausea,30,Severe,6 hours,Emergency
+mild sore throat with fatigue,29,Mild,1 day,Low
+ear pain with dizziness,40,Moderate,3 days,Moderate
+persistent severe pain with body aches,13,Severe,1 day,High
+mild cold with dizziness,5,Mild,1 day,Low
+slight muscle ache,56,Mild,7 days,Low
+moderate back pain with dizziness,37,Moderate,1 day,Moderate
+mild back pain with dizziness,26,Mild,3 days,Low
+minor skin irritation with nausea,43,Mild,7 days,Low
+severe abdominal pain with body aches,48,Severe,7 days,High
+persistent severe pain,61,Severe,3 days,High
+minor skin irritation with body aches,49,Mild,2 days,Low
+fever and cough with dizziness,41,Mild,2 days,Moderate
+persistent severe pain with weakness,69,Severe,5 days,High
+severe dizziness with weakness with body aches,31,Severe,1 day,High
+sinus pressure and fever with body aches,16,Mild,2 days,Moderate
+mild sore throat,19,Mild,1 day,Low
+occasional cough with weakness,79,Mild,1 day,Low
+sinus pressure and fever with dizziness,54,Moderate,5 days,Moderate
+minor skin irritation with dizziness,1,Mild,1 day,Low
+mild seasonal allergy symptoms,67,Mild,5 days,Low
+persistent cough with nausea,22,Mild,5 days,Moderate
+blue lips with breathing difficulty with dizziness,83,Severe,1 day,Emergency
+severe dizziness with weakness with weakness,30,Severe,5 days,High
+mild sore throat with weakness,36,Mild,7 days,Low
+ear pain with body aches,14,Mild,10 days,Moderate
+slight muscle ache,41,Mild,7 days,Low
+mild sore throat with fatigue,50,Mild,2 days,Low
+mild fatigue with weakness,43,Mild,7 days,Low
+moderate headache,54,Mild,7 days,Moderate
+severe breathing difficulty,53,Severe,6 hours,Emergency
+sudden weakness on one side with fatigue,54,Severe,6 hours,Emergency
+ear pain with dizziness,67,Mild,1 day,Moderate
+minor skin irritation with weakness,52,Mild,2 days,Low
+severe breathing difficulty with dizziness,73,Severe,1 hour,Emergency
+sinus pressure and fever with dizziness,15,Moderate,10 days,Moderate
+occasional cough with body aches,24,Mild,1 day,Low
+moderate headache with dizziness,46,Mild,3 days,Moderate
+mild fatigue with weakness,33,Mild,1 day,Low
+mild back pain with fatigue,7,Mild,3 days,Low
+persistent vomiting with fatigue,13,Severe,2 days,High
+high fever with weakness with weakness,40,Severe,2 days,High
+dehydration symptoms with nausea,69,Severe,3 days,High
+mild nasal congestion with body aches,15,Mild,2 days,Low
+mild headache with dizziness,40,Mild,7 days,Low
+persistent fatigue with fatigue,14,Moderate,7 days,Moderate
+mild cold,77,Mild,1 day,Low
+mild fatigue with nausea,48,Mild,1 day,Low
+mild fatigue with dizziness,63,Mild,1 day,Low
+blue lips with breathing difficulty with dizziness,95,Severe,1 hour,Emergency
+mild back pain with weakness,35,Mild,7 days,Low
+persistent fatigue,46,Mild,2 days,Moderate
+occasional cough with dizziness,32,Mild,5 days,Low
+occasional cough with weakness,42,Mild,2 days,Low
+mild cold with body aches,44,Mild,3 days,Low
+vomiting and weakness with dizziness,15,Moderate,2 days,Moderate
+moderate headache,67,Mild,5 days,Moderate
+mild sore throat with body aches,52,Mild,2 days,Low
+persistent severe pain with nausea,70,Severe,7 days,High
+persistent fatigue with weakness,50,Mild,10 days,Moderate
+mild cold with fatigue,30,Mild,1 day,Low
+mild seasonal allergy symptoms with fatigue,69,Mild,2 days,Low
+occasional cough with body aches,36,Mild,7 days,Low
+heavy bleeding with nausea,42,Severe,1 hour,Emergency
+mild headache with body aches,69,Mild,2 days,Low
+mild headache,71,Mild,3 days,Low
+persistent nasal congestion with body aches,6,Moderate,7 days,Moderate
+persistent nasal congestion with body aches,28,Mild,1 day,Moderate
+blue lips with breathing difficulty with dizziness,19,Severe,1 hour,Emergency
+moderate back pain with body aches,24,Moderate,2 days,Moderate
+mild sore throat with dizziness,16,Mild,7 days,Low
+moderate back pain with weakness,71,Moderate,5 days,Moderate
+sudden weakness on one side with body aches,80,Severe,6 hours,Emergency
+fever and cough with fatigue,31,Moderate,10 days,Moderate
+runny nose,21,Mild,2 days,Low
+moderate sore throat with weakness,57,Moderate,5 days,Moderate
+mild sore throat with weakness,37,Mild,3 days,Low
+mild sore throat with fatigue,34,Mild,7 days,Low
+vomiting and weakness,24,Moderate,3 days,Moderate
+sneezing with body aches,40,Mild,7 days,Low
+persistent nasal congestion with weakness,56,Mild,3 days,Moderate
+moderate back pain with nausea,60,Moderate,10 days,Moderate
+fever and cough,34,Moderate,10 days,Moderate
+sudden weakness on one side,78,Severe,1 hour,Emergency
+sinus pressure and fever with dizziness,40,Mild,2 days,Moderate
+persistent nasal congestion with dizziness,65,Moderate,3 days,Moderate
+minor skin irritation with nausea,14,Mild,2 days,Low
+persistent nasal congestion,56,Mild,7 days,Moderate
+moderate stomach discomfort with dizziness,46,Mild,1 day,Moderate
+chest pain with weakness,89,Severe,1 day,Emergency
+moderate headache with weakness,84,Mild,5 days,Moderate
+dehydration symptoms,44,Severe,7 days,High
+blue lips with breathing difficulty,94,Severe,6 hours,Emergency
+minor skin irritation,78,Mild,2 days,Low
+mild headache,71,Mild,5 days,Low
+runny nose,60,Mild,1 day,Low
+persistent fatigue with body aches,70,Mild,10 days,Moderate
+persistent nasal congestion,36,Mild,5 days,Moderate
+moderate back pain with dizziness,13,Moderate,3 days,Moderate
+mild back pain with body aches,35,Mild,1 day,Low
+severe dizziness with weakness with weakness,29,Severe,5 days,High
+mild back pain with weakness,70,Mild,5 days,Low
+heavy bleeding with dizziness,94,Severe,1 hour,Emergency
+mild fatigue with weakness,6,Mild,3 days,Low
+worsening symptoms despite rest with weakness,59,Severe,2 days,High
+loss of consciousness with nausea,69,Severe,1 day,Emergency
+blue lips with breathing difficulty with weakness,17,Severe,1 day,Emergency
+sneezing,53,Mild,2 days,Low
+ear pain with dizziness,84,Mild,10 days,Moderate
+moderate stomach discomfort with weakness,45,Mild,10 days,Moderate
+chest pain with fatigue,84,Severe,1 hour,Emergency
+ear pain,16,Moderate,5 days,Moderate
+severe abdominal pain with body aches,66,Severe,2 days,High
+chest pain with body aches,46,Severe,1 hour,Emergency
+mild fever with body aches with dizziness,36,Moderate,7 days,Moderate
+moderate sore throat with dizziness,27,Moderate,1 day,Moderate
+moderate headache with fatigue,79,Mild,2 days,Moderate
+ear pain,37,Mild,10 days,Moderate
+blue lips with breathing difficulty,41,Severe,1 day,Emergency
+slight muscle ache with dizziness,76,Mild,3 days,Low
+severe dizziness with weakness with dizziness,48,Severe,2 days,High
+severe difficulty breathing with nausea,35,Severe,6 hours,Emergency
+persistent fatigue with dizziness,7,Mild,10 days,Moderate
+mild nasal congestion with weakness,7,Mild,7 days,Low
+severe infection-like symptoms with nausea,39,Severe,7 days,High
+mild sore throat,80,Mild,3 days,Low
+sinus pressure and fever,44,Moderate,5 days,Moderate
+persistent fatigue with nausea,16,Moderate,3 days,Moderate
+high fever with weakness with nausea,35,Severe,2 days,High
+ear pain with body aches,37,Moderate,5 days,Moderate
+persistent severe pain,24,Severe,5 days,High
+mild sore throat with nausea,51,Mild,7 days,Low
+mild fatigue,2,Mild,3 days,Low
+sinus pressure and fever with nausea,79,Mild,5 days,Moderate
+mild sore throat with nausea,61,Mild,1 day,Low
+heavy bleeding with weakness,87,Severe,1 hour,Emergency
+sudden weakness on one side,88,Severe,6 hours,Emergency
+mild headache,39,Mild,5 days,Low
+mild back pain with weakness,18,Mild,5 days,Low
+persistent fatigue,80,Mild,10 days,Moderate
+severe difficulty breathing with dizziness,67,Severe,1 day,Emergency
+sudden weakness on one side with nausea,9,Severe,1 day,Emergency
+occasional cough,31,Mild,3 days,Low
+severe allergic reaction with nausea,74,Severe,1 day,Emergency
+mild cold with weakness,25,Mild,1 day,Low
+mild sore throat,77,Mild,1 day,Low
+dehydration symptoms with fatigue,26,Severe,7 days,High
+mild back pain with fatigue,27,Mild,7 days,Low
+dehydration symptoms,52,Severe,2 days,High
+sneezing with body aches,17,Mild,7 days,Low
+severe abdominal pain,13,Severe,2 days,High
+moderate headache with body aches,7,Mild,2 days,Moderate
+mild seasonal allergy symptoms,54,Mild,7 days,Low
+severe dizziness with weakness,67,Severe,3 days,High
+moderate headache with weakness,71,Moderate,3 days,Moderate
+fever and cough with dizziness,66,Moderate,5 days,Moderate
+severe dizziness with weakness,66,Severe,1 day,High
+sneezing with body aches,9,Mild,2 days,Low
+moderate back pain with body aches,53,Mild,7 days,Moderate
+moderate back pain,17,Mild,10 days,Moderate
+seizure with weakness,32,Severe,6 hours,Emergency
+sudden severe headache with confusion with dizziness,48,Severe,6 hours,Emergency
+persistent cough with body aches,59,Mild,3 days,Moderate
+moderate sore throat,13,Mild,1 day,Moderate
+runny nose,48,Mild,2 days,Low
+vomiting and weakness with nausea,20,Mild,5 days,Moderate
+sudden severe headache with confusion with body aches,11,Severe,6 hours,Emergency
+moderate back pain with weakness,24,Moderate,10 days,Moderate
+runny nose with nausea,45,Mild,7 days,Low
+mild cold with dizziness,74,Mild,2 days,Low
+persistent vomiting,87,Severe,3 days,High
+mild seasonal allergy symptoms with nausea,40,Mild,3 days,Low
+sneezing,73,Mild,5 days,Low
+minor skin irritation with fatigue,4,Mild,1 day,Low
+persistent nasal congestion with body aches,25,Mild,3 days,Moderate
+severe abdominal pain,16,Severe,2 days,High
+persistent vomiting with weakness,20,Severe,3 days,High
+severe dizziness with weakness with dizziness,87,Severe,5 days,High
+mild back pain with dizziness,15,Mild,3 days,Low
+minor skin irritation with body aches,76,Mild,5 days,Low
+mild fatigue,77,Mild,1 day,Low
+mild sore throat with body aches,18,Mild,3 days,Low
+mild headache,64,Mild,5 days,Low
+mild back pain with nausea,30,Mild,7 days,Low
+mild seasonal allergy symptoms,6,Mild,5 days,Low
+persistent cough with dizziness,78,Mild,5 days,Moderate
+worsening symptoms despite rest with dizziness,47,Severe,1 day,High
+slight muscle ache with weakness,22,Mild,7 days,Low
+persistent severe pain,21,Severe,5 days,High
+mild nasal congestion,52,Mild,7 days,Low
+ear pain,33,Mild,3 days,Moderate
+minor skin irritation with fatigue,15,Mild,7 days,Low
+severe allergic reaction,49,Severe,1 day,Emergency
+sneezing,33,Mild,2 days,Low
+sinus pressure and fever with weakness,27,Moderate,10 days,Moderate
+moderate back pain with nausea,77,Mild,10 days,Moderate
+severe allergic reaction,24,Severe,6 hours,Emergency
+sinus pressure and fever,40,Mild,7 days,Moderate
+persistent cough,64,Mild,5 days,Moderate
+mild cold with dizziness,10,Mild,1 day,Low
+vomiting and weakness with fatigue,62,Moderate,7 days,Moderate
+occasional cough,65,Mild,2 days,Low
+moderate stomach discomfort,69,Moderate,10 days,Moderate
+mild seasonal allergy symptoms,57,Mild,5 days,Low
+ear pain,57,Mild,3 days,Moderate
+persistent severe pain,18,Severe,3 days,High
+mild fever with body aches,37,Mild,10 days,Moderate
+mild nasal congestion with body aches,19,Mild,3 days,Low
+sudden severe headache with confusion,21,Severe,1 day,Emergency
+mild fatigue,43,Mild,2 days,Low
+mild fever with body aches with body aches,7,Mild,3 days,Moderate
+mild sore throat with fatigue,44,Mild,5 days,Low
+sneezing with body aches,20,Mild,1 day,Low
+severe abdominal pain,74,Severe,7 days,High
+high fever with weakness,86,Severe,5 days,High
+mild seasonal allergy symptoms with weakness,80,Mild,2 days,Low
+slight muscle ache with body aches,31,Mild,5 days,Low
+severe dizziness with weakness with fatigue,39,Severe,7 days,High
+occasional cough with weakness,25,Mild,3 days,Low
+ear pain with dizziness,69,Mild,7 days,Moderate
+heavy bleeding with body aches,82,Severe,1 hour,Emergency
+occasional cough,48,Mild,7 days,Low
+severe abdominal pain,46,Severe,1 day,High
+mild back pain,19,Mild,5 days,Low
+heavy bleeding,62,Severe,6 hours,Emergency
+mild fever with body aches,35,Mild,5 days,Moderate
+fever and cough with nausea,17,Mild,10 days,Moderate
+high fever with weakness with weakness,14,Severe,3 days,High
+high fever with weakness,70,Severe,5 days,High
+chest pain,37,Severe,1 hour,Emergency
+persistent fatigue with fatigue,19,Mild,3 days,Moderate
+mild headache with weakness,31,Mild,5 days,Low
+occasional cough,77,Mild,7 days,Low
+moderate back pain with dizziness,23,Moderate,3 days,Moderate
+slight muscle ache with dizziness,31,Mild,7 days,Low
+minor skin irritation with nausea,11,Mild,7 days,Low
+mild back pain,70,Mild,7 days,Low
+persistent nasal congestion with body aches,54,Moderate,3 days,Moderate
+persistent severe pain with fatigue,18,Severe,3 days,High
+severe abdominal pain,84,Severe,3 days,High
+mild back pain with weakness,44,Mild,2 days,Low
+blue lips with breathing difficulty,85,Severe,1 hour,Emergency
+occasional cough with fatigue,5,Mild,3 days,Low
+mild sore throat with body aches,6,Mild,3 days,Low
+vomiting and weakness with fatigue,37,Mild,1 day,Moderate
+mild headache,43,Mild,3 days,Low
+worsening symptoms despite rest with dizziness,61,Severe,5 days,High
+sneezing with nausea,64,Mild,5 days,Low
+seizure with dizziness,39,Severe,1 hour,Emergency
+mild nasal congestion with body aches,24,Mild,7 days,Low
+runny nose with body aches,42,Mild,3 days,Low
+persistent fatigue with weakness,26,Mild,10 days,Moderate
+fever and cough with body aches,83,Mild,5 days,Moderate
+fever and cough,56,Moderate,3 days,Moderate
+loss of consciousness with weakness,82,Severe,1 day,Emergency
+runny nose with nausea,31,Mild,3 days,Low
+moderate back pain with weakness,82,Moderate,2 days,Moderate
+severe allergic reaction,61,Severe,1 hour,Emergency
+mild fever with body aches,40,Mild,2 days,Moderate
+sneezing with dizziness,64,Mild,7 days,Low
+severe difficulty breathing with weakness,38,Severe,6 hours,Emergency
+mild nasal congestion with fatigue,37,Mild,5 days,Low
+runny nose with weakness,58,Mild,2 days,Low
+severe allergic reaction,90,Severe,6 hours,Emergency
+ear pain,25,Mild,10 days,Moderate
+dehydration symptoms,25,Severe,2 days,High
+occasional cough with nausea,4,Mild,3 days,Low
+vomiting and weakness,83,Moderate,1 day,Moderate
+mild seasonal allergy symptoms with dizziness,62,Mild,7 days,Low
+severe abdominal pain,26,Severe,3 days,High
+sinus pressure and fever,21,Mild,7 days,Moderate
+high fever with weakness,65,Severe,7 days,High
+high fever with weakness,48,Severe,2 days,High
+mild seasonal allergy symptoms with body aches,29,Mild,3 days,Low
+severe infection-like symptoms with body aches,35,Severe,7 days,High
+mild cold,79,Mild,7 days,Low
+moderate sore throat with nausea,26,Moderate,10 days,Moderate
+persistent vomiting,13,Severe,1 day,High
+severe breathing difficulty with fatigue,38,Severe,1 day,Emergency
+worsening symptoms despite rest with weakness,89,Severe,1 day,High
+seizure with body aches,42,Severe,1 day,Emergency
+sinus pressure and fever,43,Mild,5 days,Moderate
+high fever with weakness with weakness,66,Severe,5 days,High
+moderate stomach discomfort with nausea,45,Moderate,10 days,Moderate
+persistent severe pain with nausea,61,Severe,2 days,High
+persistent cough,35,Mild,5 days,Moderate
+mild fatigue with fatigue,79,Mild,5 days,Low
+loss of consciousness with nausea,46,Severe,1 day,Emergency
+sneezing with weakness,64,Mild,7 days,Low
+ear pain with dizziness,7,Mild,1 day,Moderate
+moderate headache,79,Moderate,3 days,Moderate
+occasional cough with body aches,77,Mild,5 days,Low
+persistent cough with nausea,22,Mild,3 days,Moderate
+persistent severe pain,15,Severe,5 days,High
+moderate headache,75,Mild,3 days,Moderate
+persistent nasal congestion,84,Mild,10 days,Moderate
+runny nose with nausea,51,Mild,3 days,Low
+moderate stomach discomfort with dizziness,30,Moderate,7 days,Moderate
+fever and cough with nausea,22,Moderate,10 days,Moderate
+severe dizziness with weakness,29,Severe,7 days,High
+mild nasal congestion with dizziness,41,Mild,2 days,Low
+sudden weakness on one side with weakness,80,Severe,6 hours,Emergency
+severe infection-like symptoms with nausea,70,Severe,1 day,High
+runny nose with body aches,54,Mild,7 days,Low
+persistent vomiting with body aches,86,Severe,5 days,High
+severe breathing difficulty,78,Severe,1 hour,Emergency
+moderate sore throat with fatigue,23,Mild,10 days,Moderate
+mild seasonal allergy symptoms,15,Mild,2 days,Low
+mild fever with body aches with fatigue,57,Moderate,10 days,Moderate
+moderate back pain,12,Mild,10 days,Moderate
+vomiting and weakness with dizziness,66,Mild,7 days,Moderate
+sneezing with nausea,59,Mild,7 days,Low
+sinus pressure and fever with fatigue,83,Mild,5 days,Moderate
+sudden weakness on one side with fatigue,76,Severe,6 hours,Emergency
+sudden weakness on one side with fatigue,41,Severe,1 day,Emergency
+severe dizziness with weakness with nausea,50,Severe,5 days,High
+persistent fatigue with dizziness,41,Mild,1 day,Moderate
+sudden severe headache with confusion with body aches,49,Severe,1 hour,Emergency
+mild seasonal allergy symptoms with weakness,11,Mild,3 days,Low
+severe dizziness with weakness with body aches,37,Severe,2 days,High
+sudden weakness on one side with fatigue,22,Severe,1 hour,Emergency
+minor skin irritation with fatigue,68,Mild,2 days,Low
+mild fatigue,43,Mild,5 days,Low
+high fever with weakness,10,Severe,7 days,High
+persistent nasal congestion with nausea,30,Mild,3 days,Moderate
+mild headache with fatigue,12,Mild,7 days,Low
+persistent fatigue,27,Moderate,5 days,Moderate
+chest pain,55,Severe,6 hours,Emergency
+sudden weakness on one side with body aches,9,Severe,1 hour,Emergency
+persistent cough with weakness,41,Mild,5 days,Moderate
+loss of consciousness with body aches,69,Severe,6 hours,Emergency
+runny nose with weakness,43,Mild,2 days,Low
+persistent fatigue with nausea,6,Moderate,10 days,Moderate
+dehydration symptoms with dizziness,32,Severe,7 days,High
+sneezing with fatigue,62,Mild,3 days,Low
+mild fatigue with body aches,31,Mild,5 days,Low
+sudden weakness on one side,79,Severe,1 day,Emergency
+slight muscle ache,31,Mild,1 day,Low
+moderate sore throat with body aches,69,Mild,10 days,Moderate
+severe infection-like symptoms with fatigue,57,Severe,7 days,High
+sneezing with weakness,62,Mild,2 days,Low
+persistent severe pain with weakness,63,Severe,7 days,High
+dehydration symptoms,41,Severe,7 days,High
+vomiting and weakness,14,Mild,7 days,Moderate
+mild back pain,65,Mild,2 days,Low
+mild back pain with fatigue,57,Mild,1 day,Low
+severe dizziness with weakness with weakness,21,Severe,7 days,High
+severe dizziness with weakness with dizziness,26,Severe,7 days,High
+fever and cough,44,Mild,10 days,Moderate
+fever and cough,79,Moderate,1 day,Moderate
+persistent fatigue,74,Moderate,1 day,Moderate
+blue lips with breathing difficulty with dizziness,9,Severe,6 hours,Emergency
+sneezing with dizziness,54,Mild,3 days,Low
+mild fever with body aches,15,Mild,10 days,Moderate
+persistent severe pain with dizziness,25,Severe,2 days,High
+persistent fatigue with body aches,5,Moderate,1 day,Moderate
+persistent fatigue with fatigue,73,Mild,5 days,Moderate
+slight muscle ache with fatigue,20,Mild,3 days,Low
+severe difficulty breathing with dizziness,9,Severe,1 day,Emergency
+fever and cough,31,Moderate,1 day,Moderate
+persistent nasal congestion,36,Moderate,10 days,Moderate
+moderate headache with body aches,12,Moderate,2 days,Moderate
+mild seasonal allergy symptoms with nausea,74,Mild,3 days,Low
+sneezing with dizziness,67,Mild,2 days,Low
+mild headache,72,Mild,7 days,Low
+mild fever with body aches with dizziness,11,Mild,3 days,Moderate
+persistent severe pain,63,Severe,5 days,High
+sneezing with fatigue,69,Mild,5 days,Low
+severe infection-like symptoms,28,Severe,5 days,High
+mild fever with body aches with body aches,54,Moderate,2 days,Moderate
+minor skin irritation with nausea,11,Mild,5 days,Low
+mild seasonal allergy symptoms with body aches,25,Mild,1 day,Low
+moderate back pain with fatigue,14,Moderate,2 days,Moderate
+moderate stomach discomfort with fatigue,6,Mild,2 days,Moderate
+severe difficulty breathing with fatigue,66,Severe,1 hour,Emergency
+moderate headache with weakness,41,Mild,5 days,Moderate
+moderate stomach discomfort with weakness,38,Mild,3 days,Moderate
+persistent fatigue with nausea,45,Mild,2 days,Moderate
+mild headache,73,Mild,2 days,Low
+mild back pain with dizziness,75,Mild,7 days,Low
+mild sore throat with dizziness,43,Mild,2 days,Low
+moderate headache with nausea,75,Mild,10 days,Moderate
+occasional cough,63,Mild,5 days,Low
+persistent severe pain with weakness,31,Severe,2 days,High
+mild back pain,8,Mild,7 days,Low
+severe abdominal pain with dizziness,16,Severe,1 day,High
+minor skin irritation,30,Mild,1 day,Low
+mild back pain,59,Mild,3 days,Low
+sinus pressure and fever,67,Mild,1 day,Moderate
+mild fever with body aches with body aches,7,Moderate,7 days,Moderate
+ear pain with dizziness,69,Moderate,10 days,Moderate
+high fever with weakness,23,Severe,1 day,High
+mild nasal congestion with nausea,68,Mild,3 days,Low
+mild fatigue with dizziness,11,Mild,3 days,Low
+moderate headache,43,Moderate,10 days,Moderate
+persistent vomiting with dizziness,21,Severe,5 days,High
+persistent nasal congestion,6,Moderate,10 days,Moderate
+mild fatigue,43,Mild,7 days,Low
+chest pain with weakness,34,Severe,1 hour,Emergency
+runny nose,36,Mild,7 days,Low
+slight muscle ache,3,Mild,2 days,Low
+worsening symptoms despite rest,19,Severe,3 days,High
+moderate back pain with dizziness,74,Mild,3 days,Moderate
+high fever with weakness with nausea,20,Severe,7 days,High
+mild fatigue with nausea,30,Mild,1 day,Low
+moderate back pain with body aches,46,Mild,1 day,Moderate
+severe dizziness with weakness with nausea,72,Severe,2 days,High
+mild fever with body aches with dizziness,28,Mild,10 days,Moderate
+mild nasal congestion,38,Mild,2 days,Low
+sneezing with dizziness,49,Mild,2 days,Low
+runny nose with body aches,12,Mild,1 day,Low
+ear pain,21,Moderate,1 day,Moderate
+vomiting and weakness,18,Mild,1 day,Moderate
+persistent cough with body aches,54,Mild,1 day,Moderate
+persistent cough,78,Moderate,7 days,Moderate
+high fever with weakness with body aches,27,Severe,3 days,High
+sneezing with dizziness,9,Mild,2 days,Low
+mild cold with nausea,62,Mild,1 day,Low
+mild sore throat with fatigue,64,Mild,7 days,Low
+moderate sore throat with nausea,5,Mild,5 days,Moderate
+worsening symptoms despite rest with nausea,52,Severe,5 days,High
+sinus pressure and fever with fatigue,43,Moderate,3 days,Moderate
+moderate sore throat with weakness,45,Mild,3 days,Moderate
+heavy bleeding with body aches,46,Severe,6 hours,Emergency
+worsening symptoms despite rest with fatigue,56,Severe,1 day,High
+vomiting and weakness with weakness,75,Moderate,1 day,Moderate
+heavy bleeding,61,Severe,6 hours,Emergency
+worsening symptoms despite rest with body aches,73,Severe,2 days,High
+minor skin irritation with dizziness,20,Mild,5 days,Low
+mild nasal congestion with dizziness,62,Mild,7 days,Low
+persistent fatigue with nausea,74,Mild,1 day,Moderate
+severe abdominal pain with nausea,23,Severe,2 days,High
+mild nasal congestion with dizziness,6,Mild,7 days,Low
+severe allergic reaction,60,Severe,1 hour,Emergency
+mild sore throat with fatigue,66,Mild,7 days,Low
+mild fever with body aches,80,Mild,10 days,Moderate
+mild headache with body aches,62,Mild,1 day,Low
+persistent cough with body aches,23,Moderate,3 days,Moderate
+mild sore throat with nausea,67,Mild,5 days,Low
+persistent nasal congestion with body aches,45,Mild,1 day,Moderate
+mild seasonal allergy symptoms with nausea,15,Mild,1 day,Low
+sinus pressure and fever,36,Moderate,7 days,Moderate
+moderate stomach discomfort with dizziness,64,Mild,2 days,Moderate
+moderate sore throat with fatigue,55,Mild,1 day,Moderate
+mild fever with body aches with fatigue,5,Mild,10 days,Moderate
+mild seasonal allergy symptoms,9,Mild,7 days,Low
+high fever with weakness with fatigue,56,Severe,3 days,High
+ear pain with nausea,72,Mild,10 days,Moderate
+moderate back pain with nausea,80,Mild,1 day,Moderate
+persistent nasal congestion,43,Moderate,7 days,Moderate
+persistent severe pain with body aches,25,Severe,2 days,High
+slight muscle ache with dizziness,19,Mild,7 days,Low
+moderate sore throat with weakness,59,Mild,2 days,Moderate
+persistent fatigue with weakness,76,Moderate,2 days,Moderate
+sneezing,41,Mild,5 days,Low
+chest pain with fatigue,67,Severe,1 hour,Emergency
+severe dizziness with weakness with dizziness,62,Severe,5 days,High
+severe dizziness with weakness,72,Severe,2 days,High
+moderate headache with fatigue,9,Mild,3 days,Moderate
+moderate sore throat with weakness,77,Mild,10 days,Moderate
+persistent cough with nausea,39,Moderate,7 days,Moderate
+fever and cough with dizziness,74,Mild,2 days,Moderate
+minor skin irritation,32,Mild,3 days,Low
+moderate stomach discomfort with fatigue,61,Moderate,1 day,Moderate
+mild seasonal allergy symptoms with dizziness,76,Mild,3 days,Low
+sneezing,27,Mild,2 days,Low
+vomiting and weakness,81,Mild,7 days,Moderate
+mild seasonal allergy symptoms with body aches,38,Mild,3 days,Low
+seizure,91,Severe,1 hour,Emergency
+sudden severe headache with confusion,12,Severe,6 hours,Emergency
+high fever with weakness with nausea,41,Severe,2 days,High
+worsening symptoms despite rest with body aches,72,Severe,2 days,High
+mild fever with body aches,14,Mild,10 days,Moderate
+persistent fatigue with weakness,52,Mild,5 days,Moderate
+mild headache with nausea,12,Mild,5 days,Low
+seizure with dizziness,55,Severe,1 hour,Emergency
+severe dizziness with weakness with body aches,44,Severe,3 days,High
+mild nasal congestion with weakness,17,Mild,7 days,Low
+persistent vomiting with weakness,15,Severe,1 day,High
+sneezing,57,Mild,5 days,Low
+sudden severe headache with confusion,30,Severe,1 day,Emergency
+sudden weakness on one side,25,Severe,6 hours,Emergency
+severe infection-like symptoms,20,Severe,3 days,High
+minor skin irritation with dizziness,40,Mild,2 days,Low
+severe abdominal pain with weakness,10,Severe,2 days,High
+mild nasal congestion with weakness,29,Mild,7 days,Low
+mild seasonal allergy symptoms with dizziness,44,Mild,1 day,Low
+severe dizziness with weakness with dizziness,19,Severe,2 days,High
+runny nose with nausea,14,Mild,3 days,Low
+loss of consciousness,53,Severe,1 hour,Emergency
+mild nasal congestion,2,Mild,7 days,Low
+persistent fatigue,85,Moderate,10 days,Moderate
+severe breathing difficulty with fatigue,92,Severe,6 hours,Emergency
+runny nose with dizziness,18,Mild,1 day,Low
+mild fever with body aches with body aches,22,Mild,2 days,Moderate
+moderate headache with body aches,8,Mild,10 days,Moderate
+mild nasal congestion with dizziness,66,Mild,2 days,Low
+mild headache with dizziness,31,Mild,5 days,Low
+occasional cough,77,Mild,1 day,Low
+severe allergic reaction with dizziness,21,Severe,6 hours,Emergency
+sinus pressure and fever,65,Moderate,1 day,Moderate
+fever and cough,32,Mild,1 day,Moderate
+sudden severe headache with confusion with dizziness,69,Severe,6 hours,Emergency
+mild fever with body aches,73,Moderate,7 days,Moderate
+mild cold with fatigue,11,Mild,7 days,Low
+loss of consciousness with dizziness,73,Severe,6 hours,Emergency
+sinus pressure and fever with dizziness,44,Moderate,10 days,Moderate
+dehydration symptoms,17,Severe,2 days,High
+severe difficulty breathing,63,Severe,1 day,Emergency
+mild seasonal allergy symptoms,23,Mild,1 day,Low
+persistent fatigue,26,Mild,3 days,Moderate
+severe infection-like symptoms with nausea,25,Severe,1 day,High
+severe infection-like symptoms with body aches,77,Severe,1 day,High
+severe abdominal pain with nausea,73,Severe,5 days,High
+mild nasal congestion,22,Mild,3 days,Low
+runny nose with fatigue,74,Mild,1 day,Low
+persistent vomiting with fatigue,15,Severe,1 day,High
+slight muscle ache,50,Mild,2 days,Low
+chest pain with dizziness,75,Severe,1 day,Emergency
+mild sore throat with body aches,54,Mild,3 days,Low
+persistent severe pain,25,Severe,7 days,High
+mild back pain,6,Mild,5 days,Low
+sudden weakness on one side,44,Severe,6 hours,Emergency
+fever and cough with body aches,30,Mild,3 days,Moderate
+dehydration symptoms with weakness,69,Severe,3 days,High
+heavy bleeding,74,Severe,1 hour,Emergency
+mild fatigue with nausea,4,Mild,2 days,Low
+persistent fatigue with dizziness,47,Moderate,1 day,Moderate
+severe infection-like symptoms with fatigue,23,Severe,2 days,High
+fever and cough,40,Moderate,1 day,Moderate
+seizure with nausea,57,Severe,1 day,Emergency
+persistent fatigue,79,Moderate,1 day,Moderate
+mild fever with body aches,80,Moderate,7 days,Moderate
+moderate sore throat with nausea,42,Moderate,3 days,Moderate
+sudden severe headache with confusion with nausea,94,Severe,1 day,Emergency
+mild nasal congestion,14,Mild,2 days,Low
+occasional cough,41,Mild,5 days,Low
+moderate headache with body aches,44,Mild,5 days,Moderate
+severe difficulty breathing with body aches,25,Severe,1 day,Emergency
+persistent vomiting,37,Severe,3 days,High
+mild sore throat,46,Mild,5 days,Low
+severe infection-like symptoms with dizziness,32,Severe,1 day,High
+seizure,75,Severe,1 hour,Emergency
+moderate sore throat with fatigue,6,Moderate,1 day,Moderate
+mild fatigue with body aches,48,Mild,1 day,Low
+severe difficulty breathing with fatigue,7,Severe,1 hour,Emergency
+blue lips with breathing difficulty with nausea,21,Severe,1 hour,Emergency
+occasional cough with dizziness,7,Mild,2 days,Low
+worsening symptoms despite rest with dizziness,73,Severe,1 day,High
+high fever with weakness,55,Severe,2 days,High
+occasional cough with fatigue,20,Mild,1 day,Low
+persistent nasal congestion,75,Mild,5 days,Moderate
+mild fatigue with fatigue,18,Mild,5 days,Low
+vomiting and weakness,85,Moderate,7 days,Moderate
+severe allergic reaction with weakness,66,Severe,1 day,Emergency
+mild nasal congestion with dizziness,65,Mild,3 days,Low
+mild headache with fatigue,41,Mild,7 days,Low
+mild cold with nausea,8,Mild,5 days,Low
+dehydration symptoms with fatigue,30,Severe,1 day,High
+severe infection-like symptoms with fatigue,78,Severe,1 day,High
+mild fever with body aches with fatigue,27,Mild,2 days,Moderate
+persistent fatigue with nausea,80,Mild,1 day,Moderate
+severe breathing difficulty with fatigue,23,Severe,1 day,Emergency
+severe dizziness with weakness,79,Severe,3 days,High
+persistent cough with fatigue,34,Moderate,7 days,Moderate
+occasional cough with fatigue,1,Mild,3 days,Low
+persistent severe pain,32,Severe,3 days,High
+mild nasal congestion with nausea,19,Mild,1 day,Low
+severe allergic reaction with dizziness,95,Severe,1 day,Emergency
+moderate stomach discomfort,46,Mild,2 days,Moderate
+worsening symptoms despite rest,72,Severe,3 days,High
+persistent severe pain,38,Severe,7 days,High
+persistent fatigue,21,Mild,2 days,Moderate
+severe breathing difficulty,55,Severe,1 day,Emergency
+slight muscle ache,79,Mild,2 days,Low
+loss of consciousness,47,Severe,1 day,Emergency
+slight muscle ache with nausea,22,Mild,1 day,Low
+ear pain,36,Moderate,10 days,Moderate
+persistent cough with weakness,11,Moderate,5 days,Moderate
+high fever with weakness with dizziness,62,Severe,5 days,High
+mild fever with body aches with fatigue,66,Moderate,7 days,Moderate
+runny nose,5,Mild,3 days,Low
+runny nose,10,Mild,3 days,Low
+loss of consciousness,14,Severe,1 day,Emergency
+mild nasal congestion with dizziness,62,Mild,1 day,Low
+loss of consciousness,82,Severe,6 hours,Emergency
+slight muscle ache with dizziness,27,Mild,2 days,Low
+severe infection-like symptoms with fatigue,46,Severe,3 days,High
+mild fatigue with weakness,74,Mild,7 days,Low
+slight muscle ache,1,Mild,5 days,Low
+minor skin irritation with fatigue,77,Mild,5 days,Low
+mild sore throat,22,Mild,3 days,Low
+persistent cough with weakness,55,Mild,5 days,Moderate
+sudden weakness on one side with dizziness,16,Severe,1 day,Emergency
+mild fatigue with weakness,48,Mild,2 days,Low
+occasional cough with fatigue,60,Mild,3 days,Low
+persistent vomiting,29,Severe,1 day,High
+worsening symptoms despite rest,85,Severe,2 days,High
+worsening symptoms despite rest with fatigue,78,Severe,5 days,High
+persistent cough,9,Mild,7 days,Moderate
+occasional cough with fatigue,23,Mild,2 days,Low
+high fever with weakness,15,Severe,5 days,High
+severe infection-like symptoms,50,Severe,1 day,High
+mild fever with body aches with weakness,40,Mild,7 days,Moderate
+chest pain with dizziness,94,Severe,1 day,Emergency
+sneezing,19,Mild,7 days,Low
+severe breathing difficulty with nausea,17,Severe,6 hours,Emergency
+sudden weakness on one side with weakness,54,Severe,1 day,Emergency
+persistent nasal congestion with dizziness,27,Moderate,3 days,Moderate
+mild nasal congestion with dizziness,52,Mild,1 day,Low
+severe allergic reaction,93,Severe,1 hour,Emergency
+severe infection-like symptoms with nausea,57,Severe,1 day,High
+severe infection-like symptoms with weakness,49,Severe,3 days,High
+severe difficulty breathing with body aches,34,Severe,1 hour,Emergency
+blue lips with breathing difficulty with dizziness,46,Severe,6 hours,Emergency
+persistent cough with dizziness,61,Moderate,2 days,Moderate
+persistent severe pain,17,Severe,7 days,High
+mild seasonal allergy symptoms,65,Mild,5 days,Low
+persistent vomiting with fatigue,32,Severe,2 days,High
+dehydration symptoms,14,Severe,5 days,High
+heavy bleeding with weakness,40,Severe,6 hours,Emergency
+sinus pressure and fever with nausea,8,Moderate,2 days,Moderate
+persistent nasal congestion with nausea,65,Moderate,7 days,Moderate
+mild cold,12,Mild,3 days,Low
+moderate sore throat with fatigue,33,Moderate,10 days,Moderate
+severe infection-like symptoms,62,Severe,7 days,High
+chest pain,65,Severe,1 hour,Emergency
+fever and cough with body aches,37,Moderate,7 days,Moderate
+severe infection-like symptoms with nausea,64,Severe,5 days,High
+moderate headache with dizziness,43,Mild,10 days,Moderate
+fever and cough with body aches,76,Mild,10 days,Moderate
+runny nose with nausea,62,Mild,1 day,Low
+severe allergic reaction with body aches,40,Severe,6 hours,Emergency
+mild back pain with dizziness,31,Mild,1 day,Low
+high fever with weakness with body aches,13,Severe,5 days,High
+mild fatigue,52,Mild,5 days,Low
+moderate back pain with fatigue,48,Moderate,10 days,Moderate
+severe dizziness with weakness with body aches,55,Severe,7 days,High
+high fever with weakness with weakness,47,Severe,1 day,High
+mild cold with nausea,72,Mild,2 days,Low
+dehydration symptoms with body aches,55,Severe,2 days,High
+moderate stomach discomfort with body aches,38,Mild,7 days,Moderate
+persistent cough,11,Mild,10 days,Moderate
+moderate headache with body aches,53,Moderate,7 days,Moderate
+moderate sore throat with dizziness,30,Moderate,3 days,Moderate
+blue lips with breathing difficulty,23,Severe,6 hours,Emergency
+severe dizziness with weakness with nausea,52,Severe,2 days,High
+fever and cough,40,Mild,2 days,Moderate
+moderate sore throat with dizziness,16,Mild,2 days,Moderate
+mild fever with body aches,66,Mild,5 days,Moderate
+mild sore throat with nausea,48,Mild,1 day,Low
+dehydration symptoms with fatigue,12,Severe,1 day,High
+slight muscle ache,40,Mild,2 days,Low
+moderate back pain,26,Mild,1 day,Moderate
+mild cold with nausea,59,Mild,7 days,Low
+sinus pressure and fever with nausea,48,Moderate,5 days,Moderate
+high fever with weakness with fatigue,61,Severe,1 day,High
+sneezing,28,Mild,1 day,Low
+mild seasonal allergy symptoms with body aches,5,Mild,5 days,Low
+persistent vomiting,86,Severe,1 day,High
+persistent vomiting with dizziness,16,Severe,1 day,High
+persistent cough,65,Mild,10 days,Moderate
+minor skin irritation with dizziness,2,Mild,3 days,Low
+severe infection-like symptoms,89,Severe,7 days,High
+persistent cough,41,Moderate,1 day,Moderate
+moderate back pain with fatigue,38,Moderate,7 days,Moderate
+mild fever with body aches with weakness,25,Mild,1 day,Moderate
+blue lips with breathing difficulty,47,Severe,1 hour,Emergency
+runny nose with weakness,15,Mild,7 days,Low
+runny nose,66,Mild,1 day,Low
+heavy bleeding with body aches,63,Severe,6 hours,Emergency
+persistent cough with nausea,10,Moderate,3 days,Moderate
+persistent severe pain,64,Severe,1 day,High
+chest pain,6,Severe,1 hour,Emergency
+occasional cough,80,Mild,3 days,Low
+moderate stomach discomfort with dizziness,19,Moderate,5 days,Moderate
+high fever with weakness,24,Severe,2 days,High
+loss of consciousness with weakness,18,Severe,6 hours,Emergency
+severe dizziness with weakness with dizziness,33,Severe,7 days,High
+persistent vomiting with weakness,26,Severe,5 days,High
+mild fatigue,57,Mild,1 day,Low
+slight muscle ache with fatigue,2,Mild,7 days,Low
+severe allergic reaction,71,Severe,1 day,Emergency
+persistent fatigue with dizziness,66,Moderate,3 days,Moderate
+mild back pain,79,Mild,1 day,Low
+moderate sore throat,68,Mild,2 days,Moderate
+persistent severe pain with body aches,40,Severe,3 days,High
+mild sore throat with dizziness,71,Mild,5 days,Low
+severe abdominal pain with weakness,68,Severe,5 days,High
+occasional cough,58,Mild,3 days,Low
+chest pain with dizziness,18,Severe,6 hours,Emergency
+mild back pain with body aches,1,Mild,1 day,Low
+seizure with weakness,31,Severe,1 day,Emergency
+severe allergic reaction with weakness,11,Severe,1 hour,Emergency
+mild nasal congestion with nausea,77,Mild,5 days,Low
+severe abdominal pain,22,Severe,2 days,High
+minor skin irritation with nausea,38,Mild,7 days,Low
+persistent vomiting,31,Severe,5 days,High
+worsening symptoms despite rest with fatigue,23,Severe,3 days,High
+mild fatigue with fatigue,28,Mild,5 days,Low
+severe abdominal pain,63,Severe,1 day,High
+severe dizziness with weakness,68,Severe,7 days,High
+chest pain,72,Severe,1 day,Emergency
+mild fever with body aches,70,Mild,2 days,Moderate
+high fever with weakness with nausea,23,Severe,5 days,High
+mild fever with body aches with fatigue,82,Mild,10 days,Moderate
+slight muscle ache,38,Mild,5 days,Low
+mild nasal congestion with nausea,66,Mild,3 days,Low
+dehydration symptoms with body aches,35,Severe,2 days,High
+high fever with weakness with nausea,32,Severe,7 days,High
+persistent severe pain with dizziness,81,Severe,5 days,High
+severe infection-like symptoms,64,Severe,1 day,High
+sneezing with fatigue,7,Mild,1 day,Low
+sneezing,37,Mild,3 days,Low
+severe infection-like symptoms,36,Severe,7 days,High
+persistent nasal congestion with fatigue,83,Moderate,10 days,Moderate
+worsening symptoms despite rest with body aches,40,Severe,7 days,High
+persistent vomiting with dizziness,58,Severe,5 days,High
+severe allergic reaction,75,Severe,1 hour,Emergency
+dehydration symptoms with fatigue,89,Severe,5 days,High
+severe allergic reaction with fatigue,80,Severe,1 day,Emergency
+dehydration symptoms,47,Severe,5 days,High
+severe difficulty breathing,28,Severe,1 hour,Emergency
+mild fever with body aches,76,Mild,3 days,Moderate
+mild cold with weakness,1,Mild,3 days,Low
+high fever with weakness with nausea,15,Severe,2 days,High
+sinus pressure and fever with nausea,67,Mild,7 days,Moderate
+mild seasonal allergy symptoms with fatigue,41,Mild,7 days,Low
+seizure,13,Severe,1 day,Emergency
+vomiting and weakness with fatigue,16,Mild,3 days,Moderate
+severe allergic reaction with body aches,47,Severe,6 hours,Emergency
+mild nasal congestion,68,Mild,5 days,Low
+slight muscle ache with fatigue,58,Mild,2 days,Low
+severe allergic reaction with dizziness,53,Severe,1 hour,Emergency
+mild seasonal allergy symptoms with nausea,37,Mild,1 day,Low
+vomiting and weakness with body aches,67,Mild,1 day,Moderate
+heavy bleeding,46,Severe,1 day,Emergency
+loss of consciousness,73,Severe,1 day,Emergency
+moderate headache with fatigue,59,Moderate,1 day,Moderate
+persistent fatigue,14,Mild,10 days,Moderate
+mild seasonal allergy symptoms,43,Mild,1 day,Low
+sneezing,33,Mild,7 days,Low
+moderate headache with weakness,57,Mild,5 days,Moderate
+mild fever with body aches,7,Mild,5 days,Moderate
+sinus pressure and fever,79,Moderate,1 day,Moderate
+vomiting and weakness with body aches,42,Moderate,10 days,Moderate
+ear pain,53,Mild,5 days,Moderate
+vomiting and weakness with dizziness,22,Moderate,10 days,Moderate
+severe infection-like symptoms with nausea,28,Severe,3 days,High
+chest pain,75,Severe,1 day,Emergency
+mild headache with dizziness,74,Mild,7 days,Low
+persistent cough with nausea,31,Mild,10 days,Moderate
+minor skin irritation,66,Mild,2 days,Low
+mild nasal congestion,33,Mild,2 days,Low
+persistent cough,13,Mild,3 days,Moderate
+mild nasal congestion with nausea,63,Mild,3 days,Low
+minor skin irritation with body aches,31,Mild,1 day,Low
+moderate headache with nausea,67,Mild,5 days,Moderate
+ear pain with nausea,77,Moderate,7 days,Moderate
+worsening symptoms despite rest with nausea,31,Severe,1 day,High
+mild sore throat with nausea,56,Mild,3 days,Low
+mild seasonal allergy symptoms with weakness,43,Mild,5 days,Low
+ear pain,75,Mild,1 day,Moderate
+persistent cough with fatigue,22,Mild,7 days,Moderate
+minor skin irritation,10,Mild,1 day,Low
+persistent vomiting with dizziness,84,Severe,7 days,High
+dehydration symptoms with body aches,14,Severe,7 days,High
+vomiting and weakness with dizziness,24,Mild,3 days,Moderate
+mild nasal congestion with weakness,38,Mild,2 days,Low
+persistent cough,51,Mild,7 days,Moderate
+high fever with weakness with weakness,75,Severe,2 days,High
+mild nasal congestion with weakness,73,Mild,2 days,Low
+chest pain with fatigue,33,Severe,6 hours,Emergency
+slight muscle ache with fatigue,30,Mild,1 day,Low
+moderate stomach discomfort,65,Mild,5 days,Moderate
+minor skin irritation with body aches,42,Mild,1 day,Low
+severe infection-like symptoms,84,Severe,7 days,High
+mild fever with body aches with nausea,71,Moderate,5 days,Moderate
+persistent severe pain,72,Severe,5 days,High
+moderate sore throat,26,Mild,2 days,Moderate
+ear pain,24,Moderate,2 days,Moderate
+persistent fatigue with nausea,34,Moderate,5 days,Moderate
+severe dizziness with weakness with fatigue,71,Severe,5 days,High
+sinus pressure and fever,7,Mild,2 days,Moderate
+mild nasal congestion,21,Mild,2 days,Low
+loss of consciousness with body aches,12,Severe,1 hour,Emergency
+seizure,56,Severe,1 day,Emergency
+sudden weakness on one side with weakness,15,Severe,1 hour,Emergency
+persistent nasal congestion with dizziness,26,Mild,2 days,Moderate
+moderate back pain with body aches,84,Moderate,10 days,Moderate
+minor skin irritation,44,Mild,5 days,Low
+mild fatigue,17,Mild,1 day,Low
+mild back pain,54,Mild,2 days,Low
+mild nasal congestion,77,Mild,1 day,Low
+minor skin irritation,17,Mild,7 days,Low
+sudden severe headache with confusion with nausea,71,Severe,6 hours,Emergency
+seizure with weakness,59,Severe,1 hour,Emergency
+worsening symptoms despite rest,54,Severe,7 days,High
+ear pain with body aches,34,Mild,1 day,Moderate
+vomiting and weakness,37,Mild,2 days,Moderate
+persistent vomiting,83,Severe,7 days,High
+mild fever with body aches with nausea,45,Moderate,5 days,Moderate
+mild fatigue with body aches,75,Mild,3 days,Low
+sudden severe headache with confusion with body aches,77,Severe,6 hours,Emergency
+sudden severe headache with confusion with weakness,31,Severe,6 hours,Emergency
+mild back pain with body aches,72,Mild,5 days,Low
+severe breathing difficulty with dizziness,49,Severe,1 day,Emergency
+severe abdominal pain,39,Severe,5 days,High
+mild back pain,52,Mild,3 days,Low
+minor skin irritation,1,Mild,1 day,Low
+moderate back pain with body aches,16,Mild,1 day,Moderate
+runny nose with dizziness,78,Mild,1 day,Low
+sudden severe headache with confusion with body aches,83,Severe,1 day,Emergency
+persistent vomiting with weakness,32,Severe,5 days,High
+minor skin irritation with fatigue,67,Mild,3 days,Low
+mild nasal congestion with fatigue,66,Mild,7 days,Low
+sinus pressure and fever,51,Moderate,2 days,Moderate
+severe difficulty breathing with nausea,40,Severe,6 hours,Emergency
+severe abdominal pain with body aches,21,Severe,7 days,High
+persistent severe pain with fatigue,54,Severe,3 days,High
+moderate headache,56,Mild,7 days,Moderate
+mild fatigue,65,Mild,1 day,Low
+moderate stomach discomfort with body aches,70,Moderate,3 days,Moderate
+worsening symptoms despite rest with fatigue,82,Severe,5 days,High
+ear pain with fatigue,53,Moderate,10 days,Moderate
+dehydration symptoms with nausea,50,Severe,5 days,High
+fever and cough,36,Mild,3 days,Moderate
+persistent fatigue,14,Mild,7 days,Moderate
+moderate stomach discomfort,78,Moderate,3 days,Moderate
+heavy bleeding with fatigue,68,Severe,1 day,Emergency
+mild sore throat with fatigue,34,Mild,2 days,Low
+severe abdominal pain,20,Severe,5 days,High
+persistent vomiting with nausea,71,Severe,3 days,High
+moderate back pain with body aches,67,Mild,2 days,Moderate
+moderate back pain with dizziness,11,Moderate,7 days,Moderate
+vomiting and weakness with dizziness,69,Moderate,3 days,Moderate
+loss of consciousness with weakness,63,Severe,1 hour,Emergency
+mild headache with dizziness,2,Mild,2 days,Low
+moderate stomach discomfort,83,Mild,3 days,Moderate
+moderate headache with nausea,65,Mild,7 days,Moderate
+persistent nasal congestion with nausea,31,Mild,5 days,Moderate
+mild fever with body aches,62,Mild,2 days,Moderate
+heavy bleeding with body aches,17,Severe,1 day,Emergency
+worsening symptoms despite rest,58,Severe,2 days,High
+high fever with weakness,70,Severe,1 day,High
+moderate sore throat with body aches,67,Mild,3 days,Moderate
+moderate back pain,55,Moderate,1 day,Moderate
+mild cold with weakness,61,Mild,1 day,Low
+severe infection-like symptoms with body aches,56,Severe,3 days,High
+mild fatigue with fatigue,16,Mild,3 days,Low
+sinus pressure and fever with nausea,41,Moderate,3 days,Moderate
+severe dizziness with weakness with dizziness,67,Severe,1 day,High
+persistent nasal congestion with nausea,26,Moderate,10 days,Moderate
+moderate back pain,14,Mild,1 day,Moderate
+slight muscle ache with body aches,41,Mild,3 days,Low
+mild fever with body aches with weakness,61,Mild,3 days,Moderate
+moderate sore throat with fatigue,21,Moderate,10 days,Moderate
+severe abdominal pain with dizziness,36,Severe,2 days,High
+runny nose,61,Mild,7 days,Low
+mild fatigue,68,Mild,1 day,Low
+sneezing with body aches,11,Mild,5 days,Low
+mild seasonal allergy symptoms,37,Mild,5 days,Low
+sneezing with nausea,4,Mild,1 day,Low
+severe allergic reaction with body aches,65,Severe,6 hours,Emergency
+moderate sore throat with weakness,80,Moderate,7 days,Moderate
+sinus pressure and fever with body aches,72,Mild,10 days,Moderate
+blue lips with breathing difficulty,74,Severe,1 hour,Emergency
+moderate stomach discomfort with body aches,38,Mild,2 days,Moderate
+mild back pain with body aches,18,Mild,3 days,Low
+fever and cough,66,Mild,3 days,Moderate
+severe infection-like symptoms,86,Severe,2 days,High
+moderate headache with dizziness,76,Mild,5 days,Moderate
+mild seasonal allergy symptoms with fatigue,50,Mild,5 days,Low
+mild fatigue with body aches,31,Mild,7 days,Low
+mild seasonal allergy symptoms with dizziness,69,Mild,3 days,Low
+runny nose with body aches,24,Mild,2 days,Low
+occasional cough with body aches,80,Mild,5 days,Low
+severe dizziness with weakness,34,Severe,3 days,High
+mild back pain,3,Mild,2 days,Low
+sneezing with fatigue,57,Mild,1 day,Low
+mild headache with nausea,64,Mild,2 days,Low
+persistent nasal congestion,64,Mild,10 days,Moderate
+sneezing with dizziness,8,Mild,3 days,Low
+occasional cough with body aches,24,Mild,2 days,Low
+persistent vomiting with dizziness,25,Severe,2 days,High
+severe dizziness with weakness with fatigue,41,Severe,1 day,High
+persistent cough with body aches,65,Moderate,5 days,Moderate
+loss of consciousness,85,Severe,1 day,Emergency
+severe abdominal pain with body aches,42,Severe,5 days,High
+mild headache with fatigue,28,Mild,1 day,Low
+moderate stomach discomfort,26,Moderate,3 days,Moderate
+moderate headache with weakness,10,Moderate,7 days,Moderate
+high fever with weakness with fatigue,57,Severe,1 day,High
+runny nose,80,Mild,3 days,Low
+minor skin irritation,20,Mild,7 days,Low
+mild sore throat with nausea,41,Mild,7 days,Low
+severe dizziness with weakness with dizziness,34,Severe,1 day,High
+moderate sore throat with weakness,10,Mild,5 days,Moderate
+vomiting and weakness,29,Mild,7 days,Moderate
+moderate stomach discomfort,40,Mild,7 days,Moderate
+sneezing with body aches,58,Mild,3 days,Low
+persistent nasal congestion,69,Moderate,5 days,Moderate
+severe breathing difficulty with fatigue,51,Severe,1 day,Emergency
+runny nose with fatigue,69,Mild,5 days,Low
+persistent nasal congestion with nausea,83,Moderate,3 days,Moderate
+moderate stomach discomfort,17,Moderate,7 days,Moderate
+sneezing with fatigue,23,Mild,1 day,Low
+mild sore throat with dizziness,13,Mild,1 day,Low
+severe infection-like symptoms with fatigue,16,Severe,3 days,High
+persistent cough with weakness,31,Moderate,10 days,Moderate
+severe difficulty breathing,64,Severe,1 day,Emergency
+persistent fatigue,52,Mild,10 days,Moderate
+severe infection-like symptoms,77,Severe,1 day,High
+severe abdominal pain,37,Severe,7 days,High
+mild sore throat with fatigue,69,Mild,5 days,Low
+minor skin irritation,32,Mild,7 days,Low
+vomiting and weakness with nausea,18,Mild,10 days,Moderate
+worsening symptoms despite rest,23,Severe,2 days,High
+vomiting and weakness with tiredness,69,Moderate,1 day,Moderate
+blue lips with breathing difficulty with tiredness,71,Severe,5 days,Emergency
+severe allergic reaction with tiredness,82,Severe,7 days,Emergency
+persistent fatigue with tiredness,73,Moderate,2 days,Moderate
+mild fever with body aches during the day,47,Moderate,3 days,Moderate
+blue lips with breathing difficulty with discomfort,93,Severe,1 hour,Emergency
+mild cold during the day,67,Mild,1 hour,Low
+mild cold in the morning,29,Mild,3 days,Low
+slight muscle ache in the morning,71,Mild,3 days,Low
+moderate back pain during the day,13,Moderate,1 day,Moderate
+slight muscle ache after activity,34,Mild,1 day,Low

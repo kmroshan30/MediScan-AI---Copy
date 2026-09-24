@@ -1,0 +1,36 @@
+name,composition,drug_class,used_for,price_inr,form,timing
+Paracetamol 500mg,Paracetamol,Analgesic / Antipyretic,"Fever, mild pain",20,Tablet,After Food
+Crocin,Paracetamol,Analgesic / Antipyretic,"Fever, headache",25,Tablet,After Food
+Dolo 650,Paracetamol 650mg,Analgesic / Antipyretic,"Fever, body pain",30,Tablet,After Food
+Ibuprofen 400mg,Ibuprofen,NSAID (anti-inflammatory),"Pain, inflammation",25,Tablet,After Food
+Aspirin 75mg,Acetylsalicylic acid,Antiplatelet / NSAID,"Heart protection (low dose), pain (high dose)",15,Tablet,After Food
+Amoxicillin 500mg,Amoxicillin,Antibiotic (Penicillin),Bacterial infections,60,Capsule,Either
+Azithromycin 500mg,Azithromycin,Antibiotic (Macrolide),Respiratory / bacterial infections,90,Tablet,Before Food
+Cetirizine 10mg,Cetirizine,Antihistamine,"Allergy, cold, itching",15,Tablet,Either
+Levocetirizine 5mg,Levocetirizine,Antihistamine,Allergy,18,Tablet,Either
+Omeprazole 20mg,Omeprazole,Proton Pump Inhibitor,"Acidity, ulcers",40,Capsule,Before Food
+Pantoprazole 40mg,Pantoprazole,Proton Pump Inhibitor,"Acidity, GERD",45,Tablet,Before Food
+Ranitidine 150mg,Ranitidine,H2 Blocker,Acidity,20,Tablet,Before Food
+Metformin 500mg,Metformin,Antidiabetic (Biguanide),Type 2 diabetes,35,Tablet,After Food
+Glimepiride 2mg,Glimepiride,Antidiabetic (Sulfonylurea),Type 2 diabetes,50,Tablet,Before Food
+Amlodipine 5mg,Amlodipine,Calcium Channel Blocker,High blood pressure,30,Tablet,Either
+Atenolol 50mg,Atenolol,Beta Blocker,"High blood pressure, heart rate control",25,Tablet,Before Food
+Losartan 50mg,Losartan,ARB (antihypertensive),High blood pressure,40,Tablet,Either
+Atorvastatin 10mg,Atorvastatin,Statin,Cholesterol control,55,Tablet,After Food (usually night)
+Ambroxol Cough Syrup,Ambroxol,Mucolytic,Cough with mucus,85,Syrup,After Food
+Benadryl Cough Syrup,Diphenhydramine,Antihistamine / Cough suppressant,"Dry cough, allergy",95,Syrup,After Food
+ORS Powder,Oral Rehydration Salts,Electrolyte replacement,"Dehydration, diarrhea",20,Powder,Either
+Loperamide 2mg,Loperamide,Antidiarrheal,Diarrhea,15,Tablet,Either
+Domperidone 10mg,Domperidone,Antiemetic,"Nausea, vomiting",25,Tablet,Before Food
+Ondansetron 4mg,Ondansetron,Antiemetic,"Nausea, vomiting",45,Tablet,Either
+Multivitamin Tablet,Multivitamin,Supplement,General nutrition support,60,Tablet,After Food
+Calcium + Vitamin D3,Calcium Carbonate + Cholecalciferol,Supplement,Bone health,70,Tablet,After Food
+Iron + Folic Acid,Ferrous Sulfate + Folic Acid,Supplement,Anemia,40,Tablet,After Food
+Vitamin C 500mg,Ascorbic Acid,Supplement,Immunity support,50,Tablet,After Food
+Diclofenac Gel,Diclofenac,NSAID (topical),Muscle / joint pain,65,Gel,Not applicable (topical)
+Povidone Iodine Solution,Povidone Iodine,Antiseptic,Wound cleaning,45,Liquid (topical),Not applicable
+ORS + Zinc,ORS + Zinc Sulfate,Electrolyte + Supplement,Diarrhea (esp. in children),30,Powder,Either
+Salbutamol Inhaler,Salbutamol,Bronchodilator,"Asthma, breathlessness",150,Inhaler,Not applicable
+Insulin (Regular),Human Insulin,Antidiabetic (injectable),Diabetes (insulin-dependent),180,Injection,As prescribed by doctor
+Thyroxine 50mcg,Levothyroxine,Thyroid hormone,Hypothyroidism,45,Tablet,Before Food (empty stomach)
+Vitamin B12 (Methylcobalamin),Methylcobalamin,Supplement,"Nerve health, B12 deficiency",60,Tablet,After Food
