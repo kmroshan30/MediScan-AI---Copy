@@ -1,8 +1,10 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import joblib
 import re
 import os
+import json
 import sqlite3
 import hashlib
 import difflib
@@ -1343,6 +1345,145 @@ with st.sidebar:
     st.markdown("""<div class='ms-sidebar-emergency'><div class='ms-emergency-icon'>☎</div><div><strong>Emergency</strong><span>Call 108</span></div></div>""", unsafe_allow_html=True)
 
 # ============================================================
+# REMINDER ALERTS — sound + notification when a reminder is due
+# ============================================================
+# Three cooperating pieces:
+#   1. Server side — every rerun, if a reminder's scheduled minute has
+#      arrived, add an in-app notification + activity entry + st.toast.
+#      Fires once per scheduled minute per session (reminder_alerts_fired).
+#   2. Client side — a small component iframe (runs real JS, unlike
+#      st.markdown which cannot execute <script> tags) ticks every 10s on
+#      every logged-in page. At the scheduled minute it plays an alert
+#      beep (Web Audio) and turns the strip red/flashing: "TIME TO TAKE
+#      YOUR MEDICINE". Between reminders it shows the next reminder ETA.
+
+if st.session_state.reminders:
+
+    if "reminder_alerts_fired" not in st.session_state:
+        st.session_state.reminder_alerts_fired = set()
+
+    _now_key = datetime.datetime.now().strftime("%H:%M")
+    for _rem in st.session_state.reminders:
+        _rem_key = _rem["time"].strftime("%H:%M")
+        if _rem_key == _now_key and _rem_key not in st.session_state.reminder_alerts_fired:
+            add_notification(
+                f"⏰ Medication reminder due now: {_rem['name']}",
+                "warning"
+            )
+            log_activity(
+                f"Reminder due: {_rem['name']}",
+                "Reminder",
+                _rem["time"].strftime("%I:%M %p")
+            )
+            st.toast(f"⏰ {_rem['name']} — time to take your medicine", icon="⏰")
+            st.session_state.reminder_alerts_fired.add(_rem_key)
+
+    _reminders_js = json.dumps(
+        [
+            {
+                "t": r["time"].strftime("%H:%M"),
+                "name": r["name"],
+            }
+            for r in st.session_state.reminders
+        ]
+    )
+
+    components.html(
+        """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <style>
+        body{margin:0;padding:0;background:transparent;font-family:'Segoe UI',Arial,sans-serif}
+        #strip{display:flex;align-items:center;min-height:44px;padding:8px 16px;
+               border-radius:12px;border:1px solid #d9ece9;background:linear-gradient(90deg,#f0fbfa,#eaf7f5);
+               color:#0e5a54;font-size:14px;font-weight:600;box-sizing:border-box}
+        #strip.due{background:#b91c1c;color:#fff;border-color:#7f1d1d;animation:msflash 1s infinite}
+        @keyframes msflash{0%,100%{opacity:1}50%{opacity:.55}}
+        </style>
+        </head>
+        <body><div id="strip">⏰ Checking reminders…</div>
+        <script>
+        (function () {
+            var reminders = __REMINDERS__;
+            var strip = document.getElementById("strip");
+            var dayKey = new Date().toDateString();
+            var fired = {};
+            function pad(n) { return ("0" + n).slice(-2); }
+            function fmt(t) {
+                var h = parseInt(t.slice(0, 2), 10), m = t.slice(3);
+                var ap = h >= 12 ? "PM" : "AM";
+                var hh = h % 12; if (hh === 0) hh = 12;
+                return hh + ":" + m + " " + ap;
+            }
+            function beep() {
+                try {
+                    var C = window.AudioContext || window.webkitAudioContext;
+                    if (!C) return;
+                    var ctx = new C();
+                    if (ctx.state === "suspended") ctx.resume();
+                    var now = ctx.currentTime;
+                    [0, 0.3, 0.6, 0.9, 1.2].forEach(function (off) {
+                        var o = ctx.createOscillator(), g = ctx.createGain();
+                        o.type = "sine"; o.frequency.value = 880;
+                        g.gain.setValueAtTime(0.4, now + off);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + off + 0.25);
+                        o.connect(g); g.connect(ctx.destination);
+                        o.start(now + off); o.stop(now + off + 0.3);
+                    });
+                } catch (e) {}
+            }
+            function dueInfo(hm) {
+                var list = [];
+                reminders.forEach(function (r) { if (r.t === hm) list.push(r.name); });
+                return list;
+            }
+            function render(hm) {
+                var dl = dueInfo(hm);
+                if (dl.length) {
+                    strip.className = "due";
+                    strip.innerHTML = "🔔 TIME TO TAKE YOUR MEDICINE — <b>" + dl.join(", ") + "</b>";
+                    return;
+                }
+                var next = null;
+                reminders.forEach(function (r) { if (r.t > hm && (!next || r.t < next.t)) next = r; });
+                if (next) {
+                    strip.className = "";
+                    strip.innerHTML = "⏰ Next reminder: <b>" + next.name + "</b> at " + fmt(next.t);
+                } else if (reminders.length) {
+                    strip.className = "";
+                    strip.innerHTML = "⏰ " + reminders.length + " reminder" +
+                        (reminders.length > 1 ? "s" : "") + " set for today — you'll be alerted when one is due.";
+                } else {
+                    strip.style.display = "none";
+                }
+            }
+            function check() {
+                var d = new Date();
+                var hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+                var dl = dueInfo(hm);
+                if (dl.length && !fired[hm]) {
+                    fired[hm] = true;
+                    beep();
+                }
+                render(hm);
+            }
+            check();
+            setInterval(check, 10000);
+            setInterval(function () {
+                var dk = new Date().toDateString();
+                if (dk !== dayKey) { dayKey = dk; fired = {}; }
+            }, 60000);
+        })();
+        </script>
+        </body>
+        </html>
+        """.replace("__REMINDERS__", _reminders_js),
+        height=56,
+    )
+
+# ============================================================
 # PAGE BACK CONTROL
 # ============================================================
 
@@ -1440,12 +1581,6 @@ if active_feature == "Profile":
 # ============================================================
 if active_feature == "Notifications":
     st.markdown("<div class='ms-page-enter'><h2>Notifications</h2><p class='ms-page-subtitle'>Important updates and reminders.</p></div>", unsafe_allow_html=True)
-    if st.session_state.reminders:
-        now = datetime.datetime.now().hour * 60 + datetime.datetime.now().minute
-        for r in sorted(st.session_state.reminders, key=lambda x: x['time']):
-            rm = r['time'].hour * 60 + r['time'].minute
-            if abs(rm-now) <= 30:
-                add_notification(f"Medication due at {r['time'].strftime('%I:%M %p')}: {r['name']}", "warning")
     if not st.session_state.notifications:
         st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>⌁</div><strong>You're all caught up</strong><p>New reminders and important activity will appear here.</p></div>", unsafe_allow_html=True)
     else:
@@ -1648,88 +1783,95 @@ if active_feature == "Triage":
 
         severity = st.selectbox(T["severity_q"], ["Mild", "Moderate", "Severe"])
 
+        st.caption(
+            "Analysis runs instantly once warmed up; on a freshly-started cloud "
+            "server the first run can take a minute or two — please wait."
+        )
+
         if st.button(T["analyze_btn"], use_container_width=True):
 
             if symptoms.strip():
 
-                duration_match = re.search(r"\d+", duration)
-                duration_days = int(duration_match.group()) if duration_match else 1
+                with st.spinner("🤖 Analyzing your symptoms..."):
 
-                severity_scores = {"Mild": 1, "Moderate": 2, "Severe": 3}
-                severity_score = severity_scores[severity]
+                    duration_match = re.search(r"\d+", duration)
+                    duration_days = int(duration_match.group()) if duration_match else 1
 
-                input_data = pd.DataFrame({
-                    "symptoms": [symptoms],
-                    "age": [age],
-                    "severity": [severity],
-                    "duration_days": [duration_days],
-                    "severity_score": [severity_score]
-                })
+                    severity_scores = {"Mild": 1, "Moderate": 2, "Severe": 3}
+                    severity_score = severity_scores[severity]
 
-                symptoms_lower = symptoms.lower()
+                    input_data = pd.DataFrame({
+                        "symptoms": [symptoms],
+                        "age": [age],
+                        "severity": [severity],
+                        "duration_days": [duration_days],
+                        "severity_score": [severity_score]
+                    })
 
-                is_emergency = any(
-                    keyword in symptoms_lower
-                    for keyword in emergency_keywords
-                )
+                    symptoms_lower = symptoms.lower()
 
-                try:
-                    if is_emergency:
-                        prediction = "Emergency"
-                        confidence = 100.0
-                        probabilities = None
-                        classes = None
-                    else:
-                        prediction = model.predict(input_data)[0]
-
-                        if hasattr(model, "predict_proba"):
-                            probabilities = model.predict_proba(input_data)[0]
-                            confidence = max(probabilities) * 100
-                            classes = list(model.classes_)
-                        else:
-                            probabilities = None
-                            confidence = None
-                            classes = None
-
-                    # General diet suggestion (only for a few keywords)
-                    matched_tip = None
-                    for keyword, tip in DIET_SUGGESTIONS.items():
-                        if keyword in symptoms_lower:
-                            matched_tip = tip
-                            break
-
-                    # ---- Save this check to the database ----
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        INSERT INTO triage_history
-                        (user_id, symptoms, age, severity, duration, predicted_urgency)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (st.session_state.user_id, symptoms, age, severity, duration, prediction)
+                    is_emergency = any(
+                        keyword in symptoms_lower
+                        for keyword in emergency_keywords
                     )
-                    conn.commit()
-                    conn.close()
-                    log_activity("Symptom assessment", "Triage", str(prediction))
-                    add_notification("New triage report available", "success")
 
-                    # Persist the result so it survives future reruns and
-                    # can be scrolled/read at leisure.
-                    st.session_state.triage_result = {
-                        "symptoms": symptoms,
-                        "prediction": prediction,
-                        "confidence": confidence,
-                        "probabilities": probabilities,
-                        "classes": classes,
-                        "is_emergency": is_emergency,
-                        "diet_tip": matched_tip,
-                    }
-                    st.rerun()
+                    try:
+                        if is_emergency:
+                            prediction = "Emergency"
+                            confidence = 100.0
+                            probabilities = None
+                            classes = None
+                        else:
+                            prediction = model.predict(input_data)[0]
 
-                except Exception as e:
-                    st.error("An error occurred while analyzing the symptoms.")
-                    st.code(str(e))
+                            if hasattr(model, "predict_proba"):
+                                probabilities = model.predict_proba(input_data)[0]
+                                confidence = max(probabilities) * 100
+                                classes = list(model.classes_)
+                            else:
+                                probabilities = None
+                                confidence = None
+                                classes = None
+
+                        # General diet suggestion (only for a few keywords)
+                        matched_tip = None
+                        for keyword, tip in DIET_SUGGESTIONS.items():
+                            if keyword in symptoms_lower:
+                                matched_tip = tip
+                                break
+
+                        # ---- Save this check to the database ----
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            INSERT INTO triage_history
+                            (user_id, symptoms, age, severity, duration, predicted_urgency)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            (st.session_state.user_id, symptoms, age, severity, duration, prediction)
+                        )
+                        conn.commit()
+                        conn.close()
+                        log_activity("Symptom assessment", "Triage", str(prediction))
+                        add_notification("New triage report available", "success")
+
+                        # Persist the result so it survives future reruns and
+                        # can be scrolled/read at leisure.
+                        st.session_state.triage_result = {
+                            "symptoms": symptoms,
+                            "prediction": prediction,
+                            "confidence": confidence,
+                            "probabilities": probabilities,
+                            "classes": classes,
+                            "is_emergency": is_emergency,
+                            "diet_tip": matched_tip,
+                        }
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error("An error occurred while analyzing the symptoms.")
+                        st.code(str(e))
 
             else:
                 st.warning("Please enter your symptoms before analyzing.")
@@ -2279,7 +2421,9 @@ elif active_feature == "Reminders":
     )
 
     st.caption(
-        "This is an in-app checklist, not a real push notification."
+        "While this app is open, a reminder rings at its scheduled time with "
+        "an alert sound, a flashing on-screen notice and a toast notification. "
+        "It is an in-app alert, not a background push notification."
     )
 
     with st.form("add_reminder_form"):
@@ -2335,7 +2479,8 @@ elif active_feature == "Reminders":
 
             log_activity(f"Reminder added: {r_name}", "Reminder", r_time.strftime("%I:%M %p"))
             add_notification(f"Medication reminder added for {r_time.strftime('%I:%M %p')}", "success")
-            st.success(f"Reminder added for {r_name}.")
+            st.toast(f"⏰ Reminder added for {r_name}.", icon="⏰")
+            st.rerun()
 
     if st.session_state.reminders:
 
