@@ -1057,6 +1057,42 @@ def safe_text(value):
 
 with st.sidebar:
 
+    # -------------------- Brand & Navigation --------------------
+    st.markdown(
+        """<div class='ms-sidebar-brand'>
+            <div class='ms-sidebar-logo'>✚</div>
+            <div><strong>MediScan AI</strong><span>Smarter Healthcare for Everyone</span></div>
+        </div>
+        <div class='ms-sidebar-search'>🔍&nbsp;&nbsp; Search...</div>""",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        """<div class='ms-live-status'><span class='ms-status-pulse'></span><span>AI services ready</span><span class='ms-status-dots'><i></i><i></i><i></i></span></div>""",
+        unsafe_allow_html=True
+    )
+
+    nav_items = [
+        ("🏠", "Home"), ("🔍", "Search"), ("🩺", "Triage"), ("💊", "Medicine Scanner"), ("🤖", "AI Assistant"),
+        ("🏥", "Hospital Finder"), ("⏰", "Reminders"), ("📋", "History"), ("📁", "Documents"),
+        ("👤", "Profile"), ("🔔", "Notifications"), ("🔐", "Privacy & Security"), ("♿", "Accessibility")
+    ]
+
+    for icon, page_name in nav_items:
+        is_active = page_name == st.session_state.get("active_feature", "Home")
+        if st.button(
+            f"{icon}  {page_name}",
+            key=f"nav_{page_name}",
+            use_container_width=True,
+            type="primary" if is_active else "secondary",
+        ):
+            st.session_state.active_feature = page_name
+            st.rerun()
+
+    st.markdown("""<div class='ms-sidebar-emergency'><div class='ms-emergency-icon'>🚑</div><div><strong>Emergency</strong><span>Call 108</span></div></div>""", unsafe_allow_html=True)
+
+    st.divider()
+
     # -------------------- Account --------------------
     st.header("Account")
     st.write(f"Logged in as **{st.session_state.user_name}**")
@@ -1251,7 +1287,6 @@ if st.session_state.get("active_feature", "Home") == "Home":
                 <div class='ms-eyebrow'>MEDISCAN AI</div>
                 <h1>Smarter Healthcare<br><span>for a Healthier Tomorrow</span></h1>
                 <p>Use AI to understand your symptoms, scan medicines, find hospitals, get insights and manage your health — all in one place.</p>
-                <div class='ms-hero-actions'><span class='ms-hero-primary'>Start Health Check <b>→</b></span><span class='ms-hero-secondary'>Learn More</span></div>
             </div>
             <div class='ms-home-doctor'></div>
             <div class='ms-home-trust'><b>✓</b><div><strong>Trusted</strong><br><span>AI Healthcare Support</span></div></div>
@@ -1259,15 +1294,25 @@ if st.session_state.get("active_feature", "Home") == "Home":
         unsafe_allow_html=True
     )
 
+    hero_cta_1, hero_cta_2 = st.columns(2, gap="medium")
+    with hero_cta_1:
+        if st.button("Start Health Check →", key="hero_cta_start", use_container_width=True):
+            st.session_state.active_feature = "Triage"
+            st.rerun()
+    with hero_cta_2:
+        if st.button("Explore Hospital Finder", key="hero_cta_hospitals", use_container_width=True):
+            st.session_state.active_feature = "Hospital Finder"
+            st.rerun()
+
     st.markdown("<div class='ms-section-title'><h3>How can we help you today?</h3><p>Choose a health tool to get started.</p></div>", unsafe_allow_html=True)
 
     actions = [
-        ("♧", "Symptom Triage", "Check symptoms with AI", "Triage", "blue"),
-        ("◉", "Medicine Scanner", "Scan & identify medicines", "Medicine Scanner", "coral"),
-        ("✦", "AI Assistant", "Ask health-related questions", "AI Assistant", "cyan"),
-        ("⌖", "Hospital Finder", "Find nearby hospitals", "Hospital Finder", "green"),
-        ("◷", "Reminders", "Manage your reminders", "Reminders", "amber"),
-        ("▤", "History", "View past records", "History", "violet"),
+        ("🩺", "Symptom Triage", "Check symptoms with AI", "Triage", "blue"),
+        ("💊", "Medicine Scanner", "Scan & identify medicines", "Medicine Scanner", "coral"),
+        ("🤖", "AI Assistant", "Ask health-related questions", "AI Assistant", "cyan"),
+        ("🏥", "Hospital Finder", "Find nearby hospitals", "Hospital Finder", "green"),
+        ("⏰", "Reminders", "Manage your reminders", "Reminders", "amber"),
+        ("📋", "History", "View past records", "History", "violet"),
     ]
     cols = st.columns(3, gap="medium")
     for i, (icon, title, subtitle, target, tone) in enumerate(actions):
@@ -1287,9 +1332,9 @@ if st.session_state.get("active_feature", "Home") == "Home":
     st.markdown("<div class='ms-section-title ms-home-section-gap'><h3>Today's Health</h3></div>", unsafe_allow_html=True)
     stats = st.columns(3, gap="medium")
     stat_data = [
-        ("▣", "Reminders", reminder_count, "medications scheduled", "amber"),
-        ("▤", "Recent records", recent_count, "activity and assessments", "blue"),
-        ("♥", "Health status", safe_text(status), "from latest triage", "green"),
+        ("⏰", "Reminders", reminder_count, "medications scheduled", "amber"),
+        ("📊", "Recent records", recent_count, "activity and assessments", "blue"),
+        ("❤️", "Health status", safe_text(status), "from latest triage", "green"),
     ]
     for col, (icon, label, value, sub, tone) in zip(stats, stat_data):
         with col:
@@ -1298,15 +1343,15 @@ if st.session_state.get("active_feature", "Home") == "Home":
     st.markdown("<div class='ms-section-title ms-home-section-gap'><h3>Recent Activity</h3></div>", unsafe_allow_html=True)
     activity_items = []
     for _, row in recent_triage.iterrows():
-        activity_items.append(("♧", "Symptom assessment", row.get("created_at", ""), row.get("predicted_urgency", "")))
-    activity_items += [("•", x["title"], x["time"], x["detail"]) for x in st.session_state.activity_log[:5]]
+        activity_items.append(("🩺", "Symptom assessment", row.get("created_at", ""), row.get("predicted_urgency", "")))
+    activity_items += [("🔸", x["title"], x["time"], x["detail"]) for x in st.session_state.activity_log[:5]]
     if activity_items:
         for icon, title, when, detail in activity_items[:5]:
             st.markdown(f"<div class='ms-activity-row'><div class='ms-activity-icon'>{icon}</div><div class='ms-activity-main'><strong>{safe_text(title)}</strong><span>{safe_text(detail)}</span></div><small>{safe_text(when)}</small></div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>◷</div><strong>No recent activity</strong><p>Your assessments, scans and uploads will appear here.</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>🗒️</div><strong>No recent activity</strong><p>Your assessments, scans and uploads will appear here.</p></div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='ms-health-tip'><div class='ms-tip-icon ms-pulse-icon'>✦</div><div><strong>Health Tips for You</strong><p>Drink enough water, maintain a balanced diet, get regular exercise, and prioritize good sleep for a healthier life.</p></div><span class='ms-tip-arrow'>→</span></div>", unsafe_allow_html=True)
+    st.markdown("<div class='ms-health-tip'><div class='ms-tip-icon ms-pulse-icon'>✨</div><div><strong>Health Tips for You</strong><p>Drink enough water, maintain a balanced diet, get regular exercise, and prioritize good sleep for a healthier life.</p></div><span class='ms-tip-arrow'>→</span></div>", unsafe_allow_html=True)
 
 # ============================================================
 # PAGE NAVIGATION
@@ -1315,34 +1360,6 @@ if st.session_state.get("active_feature", "Home") == "Home":
 # The app now behaves like separate pages instead of rendering
 # every feature beside the others.
 active_feature = st.session_state.get("active_feature", "Home")
-
-with st.sidebar:
-    st.markdown(
-        """<div class='ms-sidebar-brand'>
-            <div class='ms-sidebar-logo'>✚</div>
-            <div><strong>MediScan AI</strong><span>Smarter Healthcare for Everyone</span></div>
-        </div>
-        <div class='ms-sidebar-search'>⌕&nbsp;&nbsp; Search...</div>""",
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        """<div class='ms-live-status'><span class='ms-status-pulse'></span><span>AI services ready</span><span class='ms-status-dots'><i></i><i></i><i></i></span></div>""",
-        unsafe_allow_html=True
-    )
-
-    nav_items = [
-        ("⌂", "Home"), ("⌕", "Search"), ("♧", "Triage"), ("◉", "Medicine Scanner"), ("✦", "AI Assistant"),
-        ("⌖", "Hospital Finder"), ("◷", "Reminders"), ("▤", "History"), ("▧", "Documents"),
-        ("♙", "Profile"), ("♢", "Notifications"), ("◇", "Privacy & Security"), ("Aa", "Accessibility")
-    ]
-
-    for icon, page_name in nav_items:
-        if st.button(f"{icon}  {page_name}", key=f"nav_{page_name}", use_container_width=True):
-            st.session_state.active_feature = page_name
-            st.rerun()
-
-    st.markdown("""<div class='ms-sidebar-emergency'><div class='ms-emergency-icon'>☎</div><div><strong>Emergency</strong><span>Call 108</span></div></div>""", unsafe_allow_html=True)
 
 # ============================================================
 # REMINDER ALERTS — sound + notification when a reminder is due
@@ -1551,7 +1568,7 @@ if active_feature == "Search":
             for d in docs:
                 st.markdown(f"<div class='ms-search-result'><strong>{safe_text(d['name'])}</strong><span>Uploaded {safe_text(d['uploaded_on'])}</span></div>", unsafe_allow_html=True)
         if not found:
-            st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>⌕</div><strong>No results found</strong><p>Try a medicine name, hospital, symptom or report name.</p></div>", unsafe_allow_html=True)
+            st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>🔍</div><strong>No results found</strong><p>Try a medicine name, hospital, symptom or report name.</p></div>", unsafe_allow_html=True)
 
 # ============================================================
 # PROFILE
@@ -1582,7 +1599,7 @@ if active_feature == "Profile":
 if active_feature == "Notifications":
     st.markdown("<div class='ms-page-enter'><h2>Notifications</h2><p class='ms-page-subtitle'>Important updates and reminders.</p></div>", unsafe_allow_html=True)
     if not st.session_state.notifications:
-        st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>⌁</div><strong>You're all caught up</strong><p>New reminders and important activity will appear here.</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='ms-empty-state'><div class='ms-empty-icon'>🔕</div><strong>You're all caught up</strong><p>New reminders and important activity will appear here.</p></div>", unsafe_allow_html=True)
     else:
         for n in st.session_state.notifications:
             st.markdown(f"<div class='ms-notification-row'><strong>{safe_text(n['message'])}</strong><small>{safe_text(n['time'])}</small></div>", unsafe_allow_html=True)
