@@ -1,10 +1,20 @@
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "mediscan.db"
+# The database lives next to this module by default.  MEDISCAN_DB_PATH
+# overrides that, so the app can point at a mounted volume on a host that
+# provides one.  Streamlit Community Cloud has no durable volume, so this only
+# helps when self-hosting somewhere with a real disk.
+DB_PATH = Path(
+    os.environ.get("MEDISCAN_DB_PATH")
+    or (Path(__file__).resolve().parent / "mediscan.db")
+)
 
 
 def get_connection():
+    # The parent may not exist yet when MEDISCAN_DB_PATH points somewhere new.
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
