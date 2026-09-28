@@ -273,7 +273,7 @@ if GROQ_API_KEY is None:
 # Shown on the assistant screen. A deployed app otherwise gives no way to tell
 # which build is actually running, which is the difference between "the code is
 # wrong" and "the old build is still being served". Bump this on every deploy.
-APP_BUILD = "f3e650d"
+APP_BUILD = "2026-09-29-groq-reply"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
@@ -3893,18 +3893,18 @@ if active_feature == "AI Assistant":
         # A failed request is stashed in session_state by ask_groq, because the
         # chat path ends in st.rerun() and would otherwise wipe any warning
         # before the user could read it.
-        if st.session_state.get("ai_last_error"):
+        if st.session_state.ai_last_error:
             st.warning(
                 "The assistant could not reach the AI service "
-                f"({st.session_state['ai_last_error']}). Please try again."
+                f"({st.session_state.ai_last_error}). Please try again."
             )
-        if st.session_state.get("chat_save_error"):
-            st.warning(st.session_state["chat_save_error"])
+        if st.session_state.chat_save_error:
+            st.warning(st.session_state.chat_save_error)
 
         st.caption(
             f"Build {APP_BUILD} · model {GROQ_MODEL} · "
             f"API key {'configured' if GROQ_API_KEY else 'MISSING'} · "
-            f"last reply {len(st.session_state.get('ai_last_reply_len', 0))} chars"
+            f"last reply {st.session_state.ai_last_reply_len} chars"
         )
 
         chat_box = st.container()
