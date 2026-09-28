@@ -263,12 +263,17 @@ if OCR_AVAILABLE:
 #   GROQ_API_KEY = "your_key_here"
 # ============================================================
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY") or None
 if GROQ_API_KEY is None:
     try:
-        GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+        GROQ_API_KEY = st.secrets["GROQ_API_KEY"] or None
     except Exception:
         GROQ_API_KEY = None
+
+# Shown on the assistant screen. A deployed app otherwise gives no way to tell
+# which build is actually running, which is the difference between "the code is
+# wrong" and "the old build is still being served". Bump this on every deploy.
+APP_BUILD = "f3e650d"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
@@ -309,6 +314,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
                 reasoning_effort=GROQ_REASONING_EFFORT,
             )
             reply = (response.choices[0].message.content or "").strip()
+            st.session_state.ai_last_reply_len = len(reply)
             if reply:
                 # Cleared on success so a later screen does not show a stale
                 # error from an earlier question.
@@ -1999,6 +2005,9 @@ if "ai_last_error" not in st.session_state:
 
 if "chat_save_error" not in st.session_state:
     st.session_state.chat_save_error = ""      # last chat storage failure
+
+if "ai_last_reply_len" not in st.session_state:
+    st.session_state.ai_last_reply_len = 0     # size of the last model reply
 
 if "chat_pending" not in st.session_state:
     st.session_state.chat_pending = []         # messages the database rejected
@@ -3891,6 +3900,12 @@ if active_feature == "AI Assistant":
             )
         if st.session_state.get("chat_save_error"):
             st.warning(st.session_state["chat_save_error"])
+
+        st.caption(
+            f"Build {APP_BUILD} · model {GROQ_MODEL} · "
+            f"API key {'configured' if GROQ_API_KEY else 'MISSING'} · "
+            f"last reply {len(st.session_state.get('ai_last_reply_len', 0))} chars"
+        )
 
         chat_box = st.container()
 
