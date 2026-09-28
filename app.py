@@ -303,6 +303,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
     caller always gets displayable text.
     """
     last_error = None
+    st.session_state.ai_last_stage = f"calling_api(attempt 1 of {attempts})"
     for attempt in range(attempts):
         try:
             client = Groq(api_key=GROQ_API_KEY)
@@ -315,6 +316,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
             )
             reply = (response.choices[0].message.content or "").strip()
             st.session_state.ai_last_reply_len = len(reply)
+            st.session_state.ai_last_stage = f"got_reply({len(reply)} chars)"
             if reply:
                 # Cleared on success so a later screen does not show a stale
                 # error from an earlier question.
@@ -327,6 +329,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
     # the page. Stashing the reason in session_state is what makes a failure
     # visible on the next run instead of silently becoming a blank bubble.
     st.session_state.ai_last_error = str(last_error)
+    st.session_state.ai_last_stage = f"all_attempts_failed({last_error})"
     return EMPTY_REPLY_MESSAGE
 
 # ============================================================
@@ -2008,6 +2011,9 @@ if "chat_save_error" not in st.session_state:
 
 if "ai_last_reply_len" not in st.session_state:
     st.session_state.ai_last_reply_len = 0     # size of the last model reply
+
+if "ai_last_stage" not in st.session_state:
+    st.session_state.ai_last_stage = "idle"   # how far the last request got
 
 if "chat_pending" not in st.session_state:
     st.session_state.chat_pending = []         # messages the database rejected
@@ -3904,6 +3910,7 @@ if active_feature == "AI Assistant":
         st.caption(
             f"Build {APP_BUILD} · model {GROQ_MODEL} · "
             f"API key {'configured' if GROQ_API_KEY else 'MISSING'} · "
+            f"stage {st.session_state.ai_last_stage} · "
             f"last reply {st.session_state.ai_last_reply_len} chars"
         )
 
@@ -3955,6 +3962,7 @@ if active_feature == "AI Assistant":
                 }
             )
             save_chat_message("user", user_question)
+            st.session_state.ai_last_stage = "user_saved"
 
             try:
 
@@ -3992,6 +4000,7 @@ if active_feature == "AI Assistant":
             except Exception as e:
 
                 reply = f"Assistant error: {e}"
+                st.session_state.ai_last_stage = f"handler_exception({e})"
 
             st.session_state.chat_messages.append(
                 {
@@ -4000,6 +4009,7 @@ if active_feature == "AI Assistant":
                 }
             )
             save_chat_message("assistant", reply)
+            st.session_state.ai_last_stage = "assistant_saved"
 
             st.rerun()
 
