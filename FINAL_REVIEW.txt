@@ -1,0 +1,302 @@
+================================================================
+MEDISCAN AI - FINAL PROJECT REVIEW
+================================================================
+
+A web application for medicine and health help.
+Built with Python and Streamlit.
+
+This document explains what was built, which technologies were
+used (with versions), and how the main parts work technically.
+
+----------------------------------------------------------------
+1. WHAT THE PROJECT IS
+----------------------------------------------------------------
+
+MediScan AI is a healthcare web app. A person can:
+
+  - Register and log in with their own account
+  - Type their symptoms and get an "urgency" level
+    (Low / Moderate / High / Emergency)
+  - Take a photo of a medicine strip and let the app
+    read the printed name from the photo (OCR)
+  - Search for a medicine by name and see its
+    generic name, uses, warnings and description
+  - Chat with an AI assistant (English, Hindi, Telugu)
+  - Set medicine reminders that alert them
+  - Find hospitals and compare healthcare prices
+  - Store their own health documents and history
+
+The app has 13 main screens (features), 12 interface languages,
+and safety rules that push users towards emergency help when
+the symptoms look serious.
+
+----------------------------------------------------------------
+2. TECHNOLOGIES USED AND EXACT VERSIONS
+----------------------------------------------------------------
+
+Language and runtimes:
+  - Python 3.13.1
+  - Tesseract OCR v5.5.3 (separate system program, see section 6)
+
+Python libraries (the exact installed versions):
+
+  Streamlit        1.64.0   - the web framework (builds the whole UI)
+  pandas           3.0.6    - reading and cleaning the data files
+  numpy            2.5.3    - numbers and arrays used by the model
+  scikit-learn     1.9.1    - the machine learning model
+  joblib           1.6.0    - saving/loading the trained model file
+  plotly           7.0.0    - interactive charts
+  pytesseract      0.3.13   - Python bridge to the Tesseract OCR engine
+  Pillow           12.3.0   - image processing (opens the photo)
+  groq             1.7.0    - talks to the Groq AI service for chat
+  requests         2.34.2   - HTTP calls to the public drug databases
+
+Storage:
+  - SQLite (built into Python) - the database file, 11 tables
+
+Free public services used:
+  - Groq AI (cloud large language model service)
+  - openFDA (USA drugs database)
+  - RxNorm (medicine name database)
+  - Wikipedia (plain-language medicine descriptions)
+
+----------------------------------------------------------------
+3. HOW THE WEB APP IS BUILT
+----------------------------------------------------------------
+
+The whole app is one Streamlit program (app.py, about 4,100 lines).
+Streamlit is a Python framework that turns Python scripts into a
+web page. Every time the user clicks something, Streamlit re-runs
+the script and redraws the page.
+
+The app flow is:
+
+  Browser  ->  Streamlit server (Python)  ->  your data and AI services
+                                          ->  SQLite database file
+
+On startup the app:
+  1. Creates the SQLite database and all 11 tables (if missing)
+  2. Loads the trained machine learning model
+  3. Loads the styling (CSS) and translations
+  4. Shows the login/register screen
+
+----------------------------------------------------------------
+4. THE SYMPTOM TRIAGE (MACHINE LEARNING) PART
+----------------------------------------------------------------
+
+The app predicts how urgent the symptoms are using a model built
+with scikit-learn.
+
+How the model was built:
+
+  - Training data: data/triage_data.csv, 1,000 example rows.
+    Columns: symptoms (text), age, severity, duration, urgency.
+  - The raw data is cleaned first (duplicates and empty rows
+    removed, text converted to lowercase) and two extra columns
+    are created: duration_days (duration written as a number)
+    and severity_score (mild=1, moderate=2, severe=3).
+
+The machine learning pipeline (a chain of processing steps):
+
+  symptoms text   ->  TF-IDF vectorizer (max 1000 words, 1-2 word
+                      groups)  -> turns text into numbers
+  severity word   ->  OneHotEncoder -> turns categories into numbers
+  age / duration / severity_score -> missing values filled with
+                      median, then StandardScaler (standardised)
+
+  All three groups are joined and sent to a
+  LogisticRegression classifier (max 1000 training rounds),
+  which decides: Low, Moderate, High, or Emergency.
+
+  The data is split 80% for training / 20% for testing,
+  with a fixed random seed (42) so results can be repeated.
+
+Result on the test set: 100% accuracy.
+
+Honest note about that number: 100% does not mean the model is
+perfect in the real world. When we checked the data, every symptom
+phrase maps to only one urgency level - the dataset itself is
+completely clear, with no conflicting examples. So the model can
+memorise the rules perfectly. In real life, symptoms are never
+this neat. The 100% shows the pipeline works end-to-end, not that
+real medical judgement is reliable.
+
+Extra safety: before showing any answer, the app checks the
+symptoms against 14 emergency keywords ("severe chest pain",
+"difficulty breathing", "loss of consciousness", "heavy bleeding",
+"seizure", "anaphylaxis", etc.). If any keyword matches, the result
+is forced to EMERGENCY, no matter what the model says. This makes
+sure the machine learning model can never downgrade a serious case.
+
+----------------------------------------------------------------
+5. THE MEDICINE SCANNER (OCR + SEARCH) PART
+----------------------------------------------------------------
+
+This feature has two ways in:
+
+  1. OCR path: the user uploads a photo of a medicine strip.
+     Tesseract reads the text in the photo and the printed name
+     of the medicine is extracted automatically.
+  2. Manual path: the user simply types the medicine name.
+
+Both paths then do the same lookup:
+
+  The name is sent to THREE public databases at the same time
+  ("concurrently" - using several threads in parallel):
+
+    - openFDA       for drug labels, warnings, active ingredients
+    - RxNorm        for the official generic name
+    - Wikipedia     for a plain-language description
+
+  Every database call has a time limit (deadline) so one slow
+  service cannot freeze the app. The three results are merged,
+  scored, and one final answer is shown (generic name, form,
+  uses, warnings, description, plus web links).
+
+  The last 256 lookups are remembered (LRU cache), so repeat
+  searches are instant and do not hit the internet again.
+
+  If all external services fail, the app falls back to a small
+  local file (data/medicines.csv) so the feature still works.
+
+----------------------------------------------------------------
+6. THE OCR ENGINE
+----------------------------------------------------------------
+
+OCR (Optical Character Recognition) means reading text from an
+image. The app uses:
+
+  - Tesseract OCR v5.5.3 - the actual text-recognition engine.
+    This is a separate program that must be installed on the
+    machine (pip cannot install it).
+  - pytesseract and Pillow - the Python code that sends the image
+    to Tesseract and gets the text back.
+
+On Windows the app needs the full path to tesseract.exe, set with
+the environment variable TESSERACT_PATH (or some default paths
+are tried). For the online (Cloud) version, a file called
+packages.txt tells the hosting platform to install tesseract-ocr.
+
+----------------------------------------------------------------
+7. THE AI ASSISTANT (CHAT)
+----------------------------------------------------------------
+
+The chat assistant uses the Groq cloud AI service (Python SDK
+version 1.7.0) with the model configured as "openai/gpt-oss-20b".
+
+How it stays safe:
+  - The app sends system rules to the model: give short, clear
+    answers, do not over-warn, and direct users to emergency care
+    for anything serious.
+  - The assistant answers in English, Hindi and Telugu.
+  - The model key (GROQ_API_KEY) is kept in a secret file
+    (.streamlit/secrets.toml), never in the code or git history.
+
+----------------------------------------------------------------
+8. THE DATABASE
+----------------------------------------------------------------
+
+SQLite is a small file-based database - the whole database is one
+file (database/mediscan.db). It needs no separate server.
+
+The database has 11 tables:
+
+  users                 - accounts, usernames, passwords (hashed)
+  sessions              - keeps users logged in (browser cookie)
+  password_reset_tokens - one-use password reset links
+  triage_history        - past symptom checks
+  medicine_scans        - record of medicine searches
+  saved_medicines       - medicines the user saved
+  reminders             - medicine reminders
+  documents             - uploaded health documents (details)
+  chat_history          - past AI conversations
+  emergency_contacts    - the user's emergency contact
+  sqlite_sequence       - auto-number counter used by SQLite
+
+Every account's data is tied to the user's id, so each person
+only sees their own records.
+
+----------------------------------------------------------------
+9. SECURITY
+----------------------------------------------------------------
+
+  - Passwords: never stored as plain text. Stored using
+    PBKDF2-HMAC-SHA256 with 310,000 rounds and a unique random
+    salt per user (industry-standard slow hashing that makes
+    cracking passwords very expensive).
+  - Login: a browser cookie keeps the session alive, and the
+    session is refreshed so users are not logged out randomly.
+  - Password reset: tokens are stored only as SHA-256 digests,
+    never as usable secrets, and they expire.
+  - User text is escaped before being shown on the page, to stop
+    script-injection-style attacks.
+  - API keys live in .streamlit/secrets.toml, which is excluded
+    from git, along with .env files, the database file, and the
+    virtual environment.
+
+----------------------------------------------------------------
+10. LANGUAGES
+----------------------------------------------------------------
+
+  12 interface languages: English, Hindi, Telugu, Bengali,
+  Marathi, Tamil, Gujarati, Urdu, Kannada, Odia, Malayalam,
+  Punjabi. All buttons/labels are translated by choosing a
+  language from the sidebar.
+
+----------------------------------------------------------------
+11. RUNNING THE PROJECT
+----------------------------------------------------------------
+
+  1. python -m venv venv            (create a virtual environment)
+  2. venv\Scripts\activate          (activate it, Windows)
+  3. pip install -r requirements.txt
+  4. Install Tesseract OCR on the machine
+  5. Put GROQ_API_KEY in .streamlit/secrets.toml
+  6. streamlit run app.py
+
+The app opens in the browser at http://localhost:8501.
+
+The app is also deployed online using Streamlit Community Cloud,
+which rebuilds the site automatically whenever code is pushed to
+GitHub. To rebuild the machine learning model yourself:
+
+  python modules/preprocess.py   (clean the data)
+  python modules/train_model.py  (train and save the model)
+
+----------------------------------------------------------------
+12. HONEST LIMITATIONS (KNOWN ISSUES)
+----------------------------------------------------------------
+
+These are real and acknowledged:
+
+  - 100% model accuracy comes from a very clean dataset, not
+    real-world proof. (Explained in section 4.)
+  - The online (Cloud) version loses all user data whenever the
+    app is redeployed, because free Streamlit hosting has no
+    permanent storage. Local use keeps data forever.
+  - The medicine_scans table is created in the database but the
+    app currently never writes search records into it - the
+    scanner records nothing there yet.
+  - Tesseract must be installed separately; it is not part of
+    pip, so OCR needs that extra installation step.
+  - The app is educational, not a medical device. It is not a
+    diagnosis and is not a replacement for a doctor.
+
+----------------------------------------------------------------
+13. PROJECT FOLDERS (QUICK MAP)
+----------------------------------------------------------------
+
+  app.py                   - the whole web app
+  assets/                  - styling (CSS) and images
+  data/                    - training data and medicine files
+  database/                - database setup code + the database file
+  models/                  - the trained machine learning model
+  modules/                 - medicine search, data cleaning, training
+  tests/                   - automated tests for the medicine search
+  DOCS.md/                 - PRD, architecture, flow and design docs
+  requirements.txt         - the Python libraries with versions
+  packages.txt             - system packages needed by the Cloud build
+
+----------------------------------------------------------------
+END
+----------------------------------------------------------------
