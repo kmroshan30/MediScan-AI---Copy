@@ -283,9 +283,39 @@ GROQ_REASONING_EFFORT = "low"
 # Shown when the model still returns nothing usable, so the user is never
 # left staring at a question with no response and no explanation.
 EMPTY_REPLY_MESSAGE = (
-    "I could not produce an answer for that. Please try rephrasing your "
-    "question."
+    "Sorry, I could not generate a reply just now. Please try asking again."
 )
+
+
+def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
+    """Call Groq and return reply text, retrying if the model returns nothing.
+
+    gpt-oss is a reasoning model and can occasionally spend the whole token
+    budget on hidden reasoning, answering with an empty string and
+    finish_reason="length". That used to reach the user as a blank (then
+    silently dropped) message. Retrying with a larger budget turns those
+    failures into a normal answer, and the final fallback guarantees the
+    caller always gets displayable text.
+    """
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            response = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=messages,
+                max_tokens=max_tokens * (attempt + 1),
+                temperature=temperature,
+                reasoning_effort=GROQ_REASONING_EFFORT,
+            )
+            reply = (response.choices[0].message.content or "").strip()
+            if reply:
+                return reply
+            last_error = RuntimeError("model returned an empty reply")
+        except Exception as exc:  # network hiccup, rate limit, bad key, ...
+            last_error = exc
+    st.warning(f"Groq request failed: {last_error}")
+    return EMPTY_REPLY_MESSAGE
 
 # ============================================================
 # AI Assistant — reply languages
@@ -1922,9 +1952,7 @@ def render_medicine_ai_summary(result, query):
         )
         summary = ""
         try:
-            client = Groq(api_key=GROQ_API_KEY)
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
+            summary = ask_groq(
                 messages=[
                     {
                         "role": "system",
@@ -1937,11 +1965,7 @@ def render_medicine_ai_summary(result, query):
                 ],
                 max_tokens=320,
                 temperature=0.3,
-                reasoning_effort=GROQ_REASONING_EFFORT,
             )
-            summary = (response.choices[0].message.content or "").strip()
-            if not summary:
-                summary = EMPTY_REPLY_MESSAGE
         except Exception as exc:
             summary_loading.empty()
             st.error(f"Could not generate the explanation: {exc}")
@@ -3783,9 +3807,7 @@ if active_feature == "AI Assistant":
                 )
                 translated = ""
                 try:
-                    client = Groq(api_key=GROQ_API_KEY)
-                    response = client.chat.completions.create(
-                        model=GROQ_MODEL,
+                    translated = ask_groq(
                         messages=[
                             {
                                 "role": "system",
@@ -3796,9 +3818,7 @@ if active_feature == "AI Assistant":
                         ],
                         max_tokens=400,
                         temperature=0.2,
-                        reasoning_effort=GROQ_REASONING_EFFORT,
                     )
-                    translated = (response.choices[0].message.content or "").strip()
                 except Exception as exc:
                     translated = ""
                     translate_loading.empty()
@@ -3870,10 +3890,6 @@ if active_feature == "AI Assistant":
 
             try:
 
-                client = Groq(
-                    api_key=GROQ_API_KEY
-                )
-
                 ai_loading = st.empty()
                 ai_loading.markdown(
                     f"""
@@ -3889,29 +3905,21 @@ if active_feature == "AI Assistant":
 
                 # The system prompt is rebuilt for the selected language, so
                 # this is the switch case that decides the reply language.
-                response = client.chat.completions.create(
-                        model=GROQ_MODEL,
-                        messages=(
-                            [
-                                {
-                                    "role": "system",
-                                    "content": build_assistant_prompt(reply_language)
-                                }
-                            ]
-                            + st.session_state.chat_messages
-                        ),
-                        max_tokens=600,
-                        temperature=0.4,
-                        reasoning_effort=GROQ_REASONING_EFFORT,
-                    )
+                reply = ask_groq(
+                    messages=(
+                        [
+                            {
+                                "role": "system",
+                                "content": build_assistant_prompt(reply_language)
+                            }
+                        ]
+                        + st.session_state.chat_messages
+                    ),
+                    max_tokens=600,
+                    temperature=0.4,
+                )
 
                 ai_loading.empty()
-                # A reasoning model that runs out of budget answers with an
-                # empty string, which would render as a blank bubble and be
-                # dropped on the next reload. Fall back to a real message.
-                reply = (response.choices[0].message.content or "").strip()
-                if not reply:
-                    reply = EMPTY_REPLY_MESSAGE
 
             except Exception as e:
 
