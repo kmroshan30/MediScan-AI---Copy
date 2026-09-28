@@ -1,7 +1,11 @@
 # MediScan AI
 
 [![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/streamlit-1.37%2B-FF4B4B.svg)](https://streamlit.io)
+[![Live app](https://img.shields.io/badge/live%20app-mediscan--ai--cdu.streamlit.app-FF4B4B.svg)](https://mediscan-ai-cdu.streamlit.app/)
+And add this under the badges, above the intro paragraph:
+### 🚀 [Live demo](https://mediscan-ai-cdu.streamlit.app/)
+
+Deployed on [Streamlit Community Cloud](https://share.streamlit.io).
 
 An AI-assisted healthcare companion built with Streamlit. MediScan AI combines a
 scikit-learn symptom-triage classifier, OCR-based medicine identification backed by
