@@ -3,6 +3,10 @@ venv/
 env/
 .venv/
 
+# Local environment files (contains API keys)
+.env
+.env.*
+
 # Streamlit secrets (contains API keys)
 .streamlit/
 

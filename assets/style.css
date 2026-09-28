@@ -425,10 +425,15 @@ section[data-testid="stSidebar"] .stAlert{border-color:rgba(255,255,255,.2);}
 }
 .ms-home-hero-copy h1 span{color:#79e6d8;}
 .ms-home-hero-copy p{margin:0;font-size:14.5px;color:rgba(255,255,255,.86);line-height:1.6;max-width:460px;}
+/* The hero photo is a 1068x539 (1.98:1) landscape image, so `contain` can
+   only scale it by its width until the box is at least 1.98x as wide as the
+   hero is tall. The width below crosses that threshold against the hero's
+   300px min-height, which makes the image fill the panel's full height
+   instead of sitting as a small strip in the corner. */
 .ms-home-doctor{
-  position:absolute;right:8px;bottom:0;width:min(300px,38%);
+  position:absolute;right:0;bottom:0;width:min(620px,52%);
   height:100%;background-image:url("__MEDISCAN_HERO_DOCTOR__");
-  background-size:contain;background-repeat:no-repeat;background-position:center bottom;
+  background-size:contain;background-repeat:no-repeat;background-position:right bottom;
   opacity:.95;pointer-events:none;
 }
 .ms-home-trust{
@@ -620,6 +625,37 @@ section[data-testid="stSidebar"] .stAlert{border-color:rgba(255,255,255,.2);}
 }
 .ms-medicine-grid b{display:block;font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;}
 .ms-medicine-grid span{font-size:13.5px;color:var(--text);line-height:1.45;}
+
+/* ---------------- Medicine web search result ---------------- */
+.ms-web-result{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:20px;box-shadow:var(--shadow-lg);margin:10px 0 14px;
+}
+.ms-web-result .ms-medicine-title{align-items:flex-start;}
+.ms-web-result .ms-medicine-title > div{flex:1 1 auto;min-width:0;}
+.ms-web-image{
+  width:74px;height:74px;object-fit:contain;border-radius:12px;
+  background:var(--card-soft);border:1px solid var(--border);padding:5px;flex:0 0 auto;
+}
+.ms-web-summary{
+  font-size:13.5px;color:var(--text-secondary);line-height:1.6;margin:0 0 14px;
+  padding:12px 14px;background:var(--card-soft);border:1px solid var(--border);
+  border-radius:12px;
+}
+.ms-web-note{font-size:13px;color:var(--text-secondary);line-height:1.55;margin:0 0 12px;}
+.ms-web-note-warn{
+  background:#fff6e5;border:1px solid #f0b357;color:#8a5a00;
+  border-radius:12px;padding:10px 13px;
+}
+.ms-web-link{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:12px 16px;margin-bottom:8px;box-shadow:var(--shadow);
+  text-decoration:none;transition:transform .18s ease,border-color .18s ease;
+}
+.ms-web-link:hover{transform:translateX(3px);border-color:var(--accent);}
+.ms-web-link strong{font-size:14px;font-weight:700;color:var(--primary-dark);}
+.ms-web-link span{font-size:12.5px;color:var(--text-secondary);text-align:right;}
 
 /* ---------------- AI Assistant ---------------- */
 .ai-page-header{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
@@ -875,7 +911,9 @@ textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible{
 
 /* ---------------- Responsive ---------------- */
 @media (max-width: 900px){
-  .ms-home-doctor{width:min(230px,34%);opacity:.8;}
+  /* Hero is 280px tall here, so ~554px of width keeps the photo
+     height-scaled rather than width-scaled. */
+  .ms-home-doctor{width:min(600px,66%);opacity:.8;}
   .ms-home-hero{min-height:280px;padding:28px 24px;}
   .ms-privacy-grid{grid-template-columns:1fr;}
 }
@@ -884,11 +922,15 @@ textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible{
   .main-header{padding:24px 20px;border-radius:18px;}
   .main-header h1{font-size:26px;}
   .ms-home-hero{min-height:330px;flex-direction:column;align-items:flex-start;justify-content:flex-end;padding:24px 20px;}
-  .ms-home-doctor{width:52%;opacity:.5;right:0;}
+  /* Hero grows to 330px when it stacks, so the box needs ~650px to keep
+     the photo filling the height. */
+  .ms-home-doctor{width:min(680px,84%);opacity:.5;right:0;}
   .ms-home-trust{top:16px;left:20px;bottom:auto;}
   .ms-home-hero-copy{max-width:100%;}
   .ms-home-hero-copy p{max-width:100%;}
   .ms-medicine-grid{grid-template-columns:1fr;}
+  .ms-web-link{flex-direction:column;align-items:flex-start;gap:2px;}
+  .ms-web-link span{text-align:left;}
   .ai-user-message{margin-left:4%;}
   .ai-assistant-message{margin-right:4%;}
   .stTabs [data-baseweb="tab-list"]{overflow-x:auto;flex-wrap:nowrap;}

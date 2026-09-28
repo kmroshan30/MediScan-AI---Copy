@@ -9,10 +9,17 @@ import sqlite3
 import hashlib
 import difflib
 import datetime
+import base64
+import binascii
+import hmac
+import secrets
+import time
 from pathlib import Path
+from html import escape
 from urllib.parse import quote
 
 from database.database import init_db, get_connection
+from modules.medicine_search import search_medicine
 
 # ============================================================
 # MEDISCAN LOADING SPINNERS
@@ -69,9 +76,8 @@ except ImportError:
 st.set_page_config(
     page_title="MediScan AI",
     page_icon="🩺",
-    layout="wide"
-,
-    initial_sidebar_state="expanded"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ============================================================
@@ -85,16 +91,128 @@ MEDICINE_DATA_PATH = BASE_DIR / "data" / "medicines.csv"
 CSS_PATH = BASE_DIR / "assets" / "style.css"
 LOGO_PATH = BASE_DIR / "assets" / "mediscan_logo.png"
 
-# ============================================================
-# Database
-# ============================================================
-
+# Initialize local SQLite database
 init_db()
 
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+PASSWORD_HASH_ITERATIONS = 310_000
+
+
 def hash_password(password: str) -> str:
-    # NOTE: plain SHA-256 has no per-user salt. Fine for a coursework
-    # prototype; a real deployment should use bcrypt/passlib instead.
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash stored passwords with a unique salt and PBKDF2-HMAC-SHA256."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS
+    )
+    return "$".join(
+        (
+            "pbkdf2_sha256",
+            str(PASSWORD_HASH_ITERATIONS),
+            base64.urlsafe_b64encode(salt).decode("ascii"),
+            base64.urlsafe_b64encode(digest).decode("ascii"),
+        )
+    )
+
+
+def verify_password(password: str, encoded: str) -> bool:
+    """Verify new hashes and transparently accept legacy SHA-256 hashes."""
+    value = str(encoded or "")
+    if value.startswith("pbkdf2_sha256$"):
+        try:
+            algorithm, iterations, salt_text, digest_text = value.split("$", 3)
+            if algorithm != "pbkdf2_sha256":
+                return False
+            salt = base64.urlsafe_b64decode(salt_text.encode("ascii"))
+            expected = base64.urlsafe_b64decode(digest_text.encode("ascii"))
+            actual = hashlib.pbkdf2_hmac(
+                "sha256",
+                password.encode("utf-8"),
+                salt,
+                int(iterations),
+            )
+            return hmac.compare_digest(actual, expected)
+        except (TypeError, ValueError, binascii.Error):
+            return False
+    # One-time compatibility for databases created by older versions.
+    return hmac.compare_digest(
+        hashlib.sha256(password.encode("utf-8")).hexdigest(), value
+    )
+
+
+def _local_reset_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_local_reset_token(email: str) -> str:
+    """Issue a short-lived, one-use token for the development database.
+
+    The caller always receives a token-shaped value, even when the email is
+    unknown, so the flow does not disclose account existence.  In a real
+    deployment this token would be delivered by an email provider instead.
+    """
+    normalized = str(email or "").strip().lower()
+    raw_token = secrets.token_urlsafe(32)
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT id FROM users WHERE lower(email) = ?", (normalized,)
+        ).fetchone()
+        if user:
+            conn.execute(
+                "UPDATE password_reset_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+                (int(time.time()), int(user["id"])),
+            )
+            conn.execute(
+                """
+                INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    _local_reset_token_hash(raw_token),
+                    int(user["id"]),
+                    int(time.time()) + 15 * 60,
+                ),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+    return raw_token
+
+
+def consume_local_reset_token(email: str, token: str) -> int | None:
+    normalized = str(email or "").strip().lower()
+    token_hash = _local_reset_token_hash(str(token or ""))
+    now = int(time.time())
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT t.user_id
+            FROM password_reset_tokens t
+            JOIN users u ON u.id = t.user_id
+            WHERE t.token_hash = ?
+              AND lower(u.email) = ?
+              AND t.used_at IS NULL
+              AND t.expires_at > ?
+            """,
+            (token_hash, normalized, now),
+        ).fetchone()
+        if not row:
+            return None
+        user_id = int(row["user_id"])
+        updated = conn.execute(
+            """
+            UPDATE password_reset_tokens
+               SET used_at = ?
+             WHERE token_hash = ? AND used_at IS NULL
+            """,
+            (now, token_hash),
+        )
+        conn.commit()
+        return user_id if updated.rowcount == 1 else None
+    finally:
+        conn.close()
 
 
 def logo_data_url():
@@ -154,7 +272,21 @@ if GROQ_API_KEY is None:
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
-ASSISTANT_SYSTEM_PROMPT = (
+# ============================================================
+# AI Assistant — reply languages
+# ------------------------------------------------------------
+# The assistant can answer in English, Hindi, or Telugu.  This is a
+# switch-case style lookup: pick the language the user chose, and build the
+# system prompt from the shared safety rules plus that language's
+# instruction.  The safety rules stay in English because the model follows
+# them more reliably, while the *output* language is what the user reads.
+#
+# Brand names (Dolo 650, Paracetamol) are deliberately left in Latin script:
+# translating a medicine name makes it unsearchable and can point the user at
+# a different product.
+# ============================================================
+
+ASSISTANT_SAFETY_RULES = (
     "You are a friendly, cautious health-information assistant inside "
     "MediScan AI, an educational prototype. Answer only simple, general "
     "questions about medicines, symptoms, or health habits — for example, "
@@ -166,6 +298,282 @@ ASSISTANT_SYSTEM_PROMPT = (
     "specific to their own health, and seek emergency care immediately "
     "for anything serious or urgent. Keep answers short and clear."
 )
+
+ASSISTANT_LANGUAGES = {
+    "English": {
+        "code": "en",
+        "native": "English",
+        "instruction": (
+            "Write your entire reply in simple, natural English."
+        ),
+    },
+    "हिन्दी": {
+        "code": "hi",
+        "native": "हिन्दी",
+        "instruction": (
+            "अपना पूरा जवाब हिन्दी में लिखें — आसान और स्पष्ट शब्दों में। "
+            "दवा के ब्रांड नाम और जैव-रासायनिक नाम (जैसे Dolo 650, "
+            "Paracetamol, Pantoprazole) अंग्रेज़ी/Latin अक्षरों में ही "
+            "रखें, और दवा का नाम बदलकर न लिखें। अगर उपयोगकर्ता ने अंग्रेज़ी "
+            "में सवाल पूछा है, तो भी जवाब हिन्दी में ही दें।"
+        ),
+    },
+    "తెలుగు": {
+        "code": "te",
+        "native": "తెలుగు",
+        "instruction": (
+            "మీ సమ్పూర్ణ సమాధానాన్ని తెలుగులో రాయండి — సరళమైన, స్పష్టమైన "
+            "పదాలతో. మందుల బ్రాండ్ పేర్లు మరియు రసాయనిక పేర్లు (Dolo 650, "
+            "Paracetamol, Pantoprazole వంటివి) ఇంగ్లీష్ Latin అక్షరాల్లోనే "
+            "ఉంచండి, పేరు మార్చవద్దు. వినియోగదారు ఇంగ్లీష్‌లో అడిగినా సమాధానం "
+            "తెలుగులోనే ఇవ్వండి."
+        ),
+    },
+}
+
+# The sidebar language and the reply language spell the same languages
+# differently, so the assistant can follow the app language on first use.
+ASSISTANT_LANGUAGE_ALIASES = {
+    "English": "English",
+    "Hindi": "हिन्दी",
+    "Telugu": "తెలుగు",
+}
+
+# Everything the assistant screen shows, per reply language.
+ASSISTANT_UI = {
+    "English": {
+        "reply_language": "Reply language",
+        "title": "AI Health Assistant",
+        "subtitle": "Ask general health questions and get clear, cautious information.",
+        "disclaimer": (
+            "General health information only — not a diagnosis or a substitute "
+            "for professional medical advice."
+        ),
+        "welcome": "Hello, I'm your MediScan AI assistant.",
+        "welcome_body": (
+            "Ask me about medicines, symptoms, health habits, "
+            "or general healthcare information."
+        ),
+        "chips": (
+            "Medicine information",
+            "Symptom information",
+            "Healthy habits",
+        ),
+        "ready": "Ready to help",
+        "chat_placeholder": "Type your health question here...",
+        "clear_chat": "Clear chat",
+        "explain_simple": "Explain simply",
+        "summarize": "Summarize",
+        "regenerate": "Regenerate",
+        "translate": "Translate last answer",
+        "voice_input": "Voice input",
+        "record": "Record",
+        "thinking": "MediScan AI is thinking...",
+        "you": "You",
+        "assistant": "MediScan AI",
+        "no_key": (
+            "No Groq API key found. Set `GROQ_API_KEY` in your environment "
+            "or `.streamlit/secrets.toml`."
+        ),
+        "no_lib": "The `groq` package isn't installed. Run `pip install groq`.",
+        "answer_language_note": "Answers are in",
+        "prompts": {
+            "explain_simple": "Explain your last answer in very simple words.",
+            "summarize": "Summarize your last answer in 3 short bullet points.",
+            "regenerate": "Please regenerate your previous answer with clearer wording.",
+        },
+        "suggestions": [
+            "Is Dolo 650 taken before or after food?",
+            "What is a common symptom of acidity?",
+            "How do I stay hydrated in summer?",
+        ],
+    },
+    "हिन्दी": {
+        "reply_language": "जवाब की भाषा",
+        "title": "एआई स्वास्थ्य सहायक",
+        "subtitle": "सामान्य स्वास्थ्य सवाल पूछें और स्पष्ट जानकारी पाएं।",
+        "disclaimer": (
+            "यह केवल सामान्य स्वास्थ्य जानकारी है — निदान नहीं, और न ही "
+            "डॉक्टर की सलाह का विकल्प।"
+        ),
+        "welcome": "नमस्ते, मैं आपका MediScan AI सहायक हूं।",
+        "welcome_body": (
+            "मुझसे दवाओं, लक्षणों, स्वास्थ्य आदतों या सामान्य स्वास्थ्य "
+            "जानकारी के बारे में पूछ सकते हैं।"
+        ),
+        "chips": (
+            "दवा की जानकारी",
+            "लक्षणों की जानकारी",
+            "स्वस्थ आदतें",
+        ),
+        "ready": "मदद के लिए तैयार",
+        "chat_placeholder": "अपना स्वास्थ्य सवाल यहां लिखें...",
+        "clear_chat": "चैट साफ़ करें",
+        "explain_simple": "आसान भाषा में समझाएं",
+        "summarize": "सारांश बताएं",
+        "regenerate": "फिर से लिखें",
+        "translate": "पिछले जवाब का अनुवाद करें",
+        "voice_input": "वॉइस इनपुट",
+        "record": "रिकॉर्ड करें",
+        "thinking": "MediScan AI सोच रहा है...",
+        "you": "आप",
+        "assistant": "MediScan AI",
+        "no_key": (
+            "Groq API कुंजी नहीं मिली। अपने एनवायरनमेंट या "
+            "`.streamlit/secrets.toml` में `GROQ_API_KEY` सेट करें।"
+        ),
+        "no_lib": "`groq` पैकेज इंस्टॉल नहीं है। `pip install groq` चलाएं।",
+        "answer_language_note": "जवाब की भाषा:",
+        "prompts": {
+            "explain_simple": "अपने पिछले जवाब को बहुत आसान शब्दों में समझाएं।",
+            "summarize": "अपने पिछले जवाब को 3 छोटी बिंदुओं में सारांश बताएं।",
+            "regenerate": "कृपया अपने पिछले जवाब को और स्पष्ट शब्दों में फिर से लिखें।",
+        },
+        "suggestions": [
+            "Dolo 650 दवा खाने से पहले लें या बाद में?",
+            "अम्लता के आम लक्षण क्या हैं?",
+            "गर्मी में शरीर में पानी कैसे बनाए रखें?",
+        ],
+    },
+    "తెలుగు": {
+        "reply_language": "సమాధాన భాష",
+        "title": "AI ఆరోగ్య సహాయకుడు",
+        "subtitle": "సాధారణ ఆరోగ్య ప్రశ్నలు అడిగి స్పష్టమైన సమాచారం పొందండి.",
+        "disclaimer": (
+            "ఇది సాధారణ ఆరోగ్య సమాచారం మాత్రమే — నిర్ధారణ కాదు, వైద్య "
+            "సలహాకు ప్రత్యామాయ కాదు."
+        ),
+        "welcome": "నమస్కారం, నేను మీ MediScan AI సహాయకుడను.",
+        "welcome_body": (
+            "మందులు, లక్షణాలు, ఆరోగ్య అలవాట్లు లేదా సాధారణ వైద్య సమాచారం "
+            "గురించి నన్ను అడగవచ్చు."
+        ),
+        "chips": (
+            "మందుల సమాచారం",
+            "లక్షణాల సమాచారం",
+            "ఆరోగ్య అలవాట్లు",
+        ),
+        "ready": "సహాయం చేయడానికి సిద్ధం",
+        "chat_placeholder": "మీ ఆరోగ్య ప్రశ్నను ఇక్కడ టైప్ చేయండి...",
+        "clear_chat": "చాట్ తొలగించు",
+        "explain_simple": "సరళంగా వివరించు",
+        "summarize": "సారాంశం చెప్పు",
+        "regenerate": "మళ్ళీ రాయి",
+        "translate": "మునుపటి సమాధానాన్ని అనువదించు",
+        "voice_input": "వాయిస్ ఇన్‌పుట్",
+        "record": "రికార్డ్ చేయి",
+        "thinking": "MediScan AI ఆలోచిస్తోంది...",
+        "you": "మీరు",
+        "assistant": "MediScan AI",
+        "no_key": (
+            "Groq API కీ కనబడలేదు. మీ ఎన్‌విరాన్‌మెంట్ లేదా "
+            "`.streamlit/secrets.toml` లో `GROQ_API_KEY` సెట్ చేయండి."
+        ),
+        "no_lib": "`groq` ప্যাকేజీ ఇంస్టాల్ కాలేదు. `pip install groq` నడపండి.",
+        "answer_language_note": "సమాధాన భాష:",
+        "prompts": {
+            "explain_simple": "మీ మునుపటి సమాధానాన్ని చాలా సరళమైన పదాల్లో వివరించండి.",
+            "summarize": "మీ మునుపటి సమాధానాన్ని 3 చిన్న అంశాలుగా సారాంశం చెప్పండి.",
+            "regenerate": "మీ మునుపటి సమాధానాన్ని స్పష్టమైన పదాలతో మళ్ళీ రాయండి.",
+        },
+        "suggestions": [
+            "Dolo 650 మందిని భోజనం ముందు తీసుకోవాలా లేదా తర్వాత?",
+            "అమ్లత గాంట్ల ఉండే సాధారణ లక్షణాలు ఏమిటి?",
+            "వేసummerలో శరీరంలో నీరు ఎలా ఉంచుకోవాలి?"
+            .replace("వేసummerలో", "వేస్తిలో"),
+        ],
+    },
+}
+
+
+def assistant_language_name(app_language: str) -> str:
+    """Map a sidebar language onto an assistant reply language."""
+    return ASSISTANT_LANGUAGE_ALIASES.get(app_language, "English")
+
+
+def assistant_ui(language_name: str) -> dict:
+    return ASSISTANT_UI.get(language_name, ASSISTANT_UI["English"])
+
+
+def assistant_code(language_name: str) -> str:
+    return ASSISTANT_LANGUAGES.get(language_name, ASSISTANT_LANGUAGES["English"])["code"]
+
+
+def build_assistant_prompt(language_name: str) -> str:
+    """Build the system prompt for one reply language (the switch case)."""
+    config = ASSISTANT_LANGUAGES.get(language_name) or ASSISTANT_LANGUAGES["English"]
+    return (
+        ASSISTANT_SAFETY_RULES
+        + " "
+        + config["instruction"]
+        + " Always write the closing reminder about seeing a doctor in that "
+        "same language too, and keep the whole reply under 150 words."
+    )
+
+
+def build_translation_prompt(text: str, language_name: str) -> str:
+    """Prompt used by the 'translate last answer' control."""
+    config = ASSISTANT_LANGUAGES.get(language_name) or ASSISTANT_LANGUAGES["English"]
+    return (
+        "Translate the following health-information answer into "
+        f"{config['native']} ({config['code']}). Keep every medicine brand or "
+        "chemical name in Latin script exactly as written, keep the meaning and "
+        "the medical disclaimer unchanged, and output only the translation.\n\n"
+        f"{text}"
+    )
+
+
+# Medicine lookups are grounded on openFDA/RxNorm/Wikipedia data, and the model
+# is only asked to explain that data (or, for names no database knows, to say
+# what the name usually refers to).  It still must not invent a dosage.
+def build_medicine_prompt(name: str, facts: dict, language_name: str) -> str:
+    """Prompt for the plain-language summary shown under a medicine result."""
+    config = ASSISTANT_LANGUAGES.get(language_name) or ASSISTANT_LANGUAGES["English"]
+    known = facts.get("matched")
+    lines = [
+        f"Medicine name searched: {name}",
+        "",
+        "Reference data gathered from public drug databases:",
+    ]
+    if known:
+        for key, label in (
+            ("matched_name", "Closest database match"),
+            ("generic_name", "Generic name"),
+            ("substance", "Active substance"),
+            ("drug_class", "Drug class"),
+            ("form", "Form"),
+            ("purpose", "Purpose"),
+            ("uses", "What it is used for"),
+            ("side_effects", "Common side effects"),
+            ("warnings", "Warnings"),
+        ):
+            value = facts.get(key)
+            if value:
+                lines.append(f"- {label}: {value}")
+    else:
+        lines.append(
+            "- No public drug database recognised this name. It may be an "
+            "Indian brand name, a local formulation, or a misspelling."
+        )
+    lines += [
+        "",
+        "Write a short plain-language summary for a patient (5 bullet points, "
+        "under 120 words) that:",
+        "1. says what the medicine is generally used for,",
+        "2. says whether it is usually taken before or after food, if that is "
+        "generally known, and never gives a dose, tablet count, or strength,",
+        "3. mentions the two most common side effects or precautions, if known,",
+        "4. is honest if you are not sure what this name refers to, and",
+        f"5. is written entirely in {config['native']} ({config['code']}), "
+        "keeping the medicine name in Latin script.",
+        "If you are not sure this medicine exists, say so plainly instead of "
+        "guessing. Do not add a diagnosis or treatment plan.",
+    ]
+    return "\n".join(lines)
+
+
+ASSISTANT_SYSTEM_PROMPT = build_assistant_prompt("English")
+
 
 # ============================================================
 # Auth session state
@@ -179,6 +587,328 @@ if "username" not in st.session_state:
     st.session_state.username = None
 if "emergency_contact" not in st.session_state:
     st.session_state.emergency_contact = {"name": "", "phone": "", "relation": ""}
+
+
+# ============================================================
+# Refresh-proof sign-in
+# ------------------------------------------------------------
+# Reloading the page used to hand Streamlit a brand-new session, wiping
+# st.session_state and throwing the visitor back to the login screen on the
+# Home page. The signed-in visitor is now remembered by a token in a
+# long-lived cookie: its SHA-256 digest is matched against the `sessions`
+# table and the account is rehydrated here, before the login gate below runs.
+# Their documents, chat, reminders and saved medicines are already reloaded
+# from SQLite further down (load_local_user_data), so restoring the identity
+# and the current page is enough to bring the whole app back.
+# ============================================================
+
+PERSIST_COOKIE_NAME = "mediscan_session"
+PERSIST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+PERSIST_TOKEN_TTL = 60 * 60 * 24 * 30       # 30 days
+
+# Only pages the app actually renders are restored, so a stale or edited
+# value can never leave the visitor staring at a blank screen.
+PERSISTED_FEATURES = frozenset({
+    "Home", "Search", "Triage", "Medicine Scanner", "AI Assistant",
+    "Hospital Finder", "Reminders", "History", "Documents", "Profile",
+    "Notifications", "Privacy & Security", "Accessibility",
+    "Loading Spinners",
+})
+
+# Display preferences that live in session_state and would otherwise reset.
+PERSISTED_UI_FLAGS = ("accessibility_large_text", "accessibility_high_contrast")
+
+
+def _persist_token_hash(token):
+    """Hash a browser token the same way the reset tokens are hashed."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _read_persist_cookie():
+    """Read the token the browser sent with this page load, if any.
+
+    st.context.cookies only reflects what the browser sent when the page
+    loaded, so this returns nothing until the next reload — that is expected.
+    """
+    try:
+        return st.context.cookies.get(PERSIST_COOKIE_NAME)
+    except Exception:
+        # Older Streamlit builds have no st.context.cookies; the app then
+        # simply keeps its previous reload behaviour instead of failing.
+        return None
+
+
+def _write_persist_cookie(js):
+    """Run a cookie write inside a same-origin, zero-height component frame.
+
+    Streamlit has no server-side cookie API, and the cookie has to be written
+    by the browser, so this uses a sandboxed-but-same-origin iframe that shares
+    the app's origin. The frame is collapsed to nothing so it is invisible.
+    """
+    components.html(
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>html,body{margin:0;padding:0;height:0;overflow:hidden;"
+        "background:transparent}</style></head>"
+        f"<body><script>{js}</script></body></html>",
+        height=0,
+    )
+
+
+def _set_persist_cookie(token):
+    _write_persist_cookie(
+        "document.cookie = %s;"
+        % json.dumps(
+            f"{PERSIST_COOKIE_NAME}={token};"
+            f"path=/;max-age={PERSIST_COOKIE_MAX_AGE};SameSite=Lax"
+        )
+    )
+
+
+def _clear_persist_cookie():
+    _write_persist_cookie(
+        "document.cookie = %s;"
+        % json.dumps(f"{PERSIST_COOKIE_NAME}=;path=/;max-age=0;SameSite=Lax")
+    )
+
+
+def _current_ui_state():
+    """The slice of interface state that should survive a page reload."""
+    state = {"active_feature": st.session_state.get("active_feature", "Home")}
+    for flag in PERSISTED_UI_FLAGS:
+        state[flag] = bool(st.session_state.get(flag, False))
+    return state
+
+
+def issue_persist_token(user_id):
+    """Store a fresh token digest for a signed-in visitor and return the token.
+
+    Only the digest is written, so a copy of the database cannot be used to
+    impersonate anyone. Returns None (after warning) if the write fails, which
+    leaves the visitor signed in for this page load only.
+    """
+    token = secrets.token_urlsafe(32)
+    try:
+        conn = get_connection()
+        conn.execute(
+            """INSERT INTO sessions (user_id, token_hash, ui_state, expires_at, last_active)
+               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+            (
+                user_id,
+                _persist_token_hash(token),
+                json.dumps(_current_ui_state()),
+                int(time.time()) + PERSIST_TOKEN_TTL,
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        st.warning(f"Could not start a refresh-proof session: {exc}")
+        return None
+    st.session_state.persist_token = token
+    st.session_state.persist_cookie_written = False
+    return token
+
+
+def save_persist_ui_state():
+    """Record which page the visitor is on, so a reload returns them to it."""
+    token = st.session_state.get("persist_token")
+    if not token or not st.session_state.get("user_id"):
+        return
+    try:
+        conn = get_connection()
+        conn.execute(
+            """UPDATE sessions SET ui_state = ?, last_active = CURRENT_TIMESTAMP
+               WHERE token_hash = ?""",
+            (json.dumps(_current_ui_state()), _persist_token_hash(token)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        # Remembering the page is never worth interrupting the app for.
+        pass
+
+
+def drop_persist_token():
+    """Forget this browser's token on sign-out and on account deletion."""
+    token = st.session_state.pop("persist_token", None)
+    st.session_state.pop("persist_cookie_written", None)
+    # Both callers st.rerun() straight afterwards, which can discard the
+    # component carrying the cookie delete, so ask the next run to repeat it.
+    st.session_state.persist_cookie_clear_pending = True
+    _clear_persist_cookie()
+    if not token:
+        return
+    try:
+        conn = get_connection()
+        conn.execute(
+            "DELETE FROM sessions WHERE token_hash = ?",
+            (_persist_token_hash(token),),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def restore_persist_session():
+    """Sign the visitor back in from the cookie their last page load left.
+
+    Runs once per Streamlit session, before the login gate. The browser only
+    resends cookies when it makes a new request, so signing out leaves a stale
+    cookie in st.context for the rest of this session: `persist_restored` stays
+    True and this function does not run again until the next reload, by which
+    time the token has been deleted and the cookie cleared.
+    """
+    if st.session_state.get("persist_restored") or st.session_state.get("user_id"):
+        st.session_state.persist_restored = True
+        return
+    st.session_state.persist_restored = True
+
+    token = _read_persist_cookie()
+    if not token:
+        return
+
+    try:
+        conn = get_connection()
+        row = conn.execute(
+            """SELECT s.user_id, s.ui_state, u.name, u.username
+               FROM sessions s
+               JOIN users u ON u.id = s.user_id
+               WHERE s.token_hash = ? AND s.expires_at > ?""",
+            (_persist_token_hash(token), int(time.time())),
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return
+
+    # No row means the token is unknown or expired, or the account is gone.
+    if not row:
+        return
+
+    st.session_state.persist_token = token
+    st.session_state.user_id = row["user_id"]
+    st.session_state.user_name = row["name"]
+    st.session_state.username = row["username"]
+
+    try:
+        ui_state = json.loads(row["ui_state"] or "{}")
+    except (TypeError, ValueError):
+        ui_state = {}
+
+    if ui_state.get("active_feature") in PERSISTED_FEATURES:
+        st.session_state.active_feature = ui_state["active_feature"]
+    for flag in PERSISTED_UI_FLAGS:
+        if flag in ui_state:
+            st.session_state[flag] = bool(ui_state[flag])
+    # emergency_contact is intentionally left alone: load_local_user_data()
+    # reads the same emergency_contacts row further down.
+
+
+restore_persist_session()
+
+# Cookie writes are (re-)issued here rather than where they are requested,
+# because both sign-in and sign-out end in st.rerun(), which can discard the
+# component that carries the write. This run therefore replaces the write that
+# was cut short, and on later loads it slides the expiry forward.
+if st.session_state.pop("persist_cookie_clear_pending", False):
+    _clear_persist_cookie()
+elif st.session_state.get("persist_token") and not st.session_state.get("persist_cookie_written"):
+    st.session_state.persist_cookie_written = True
+    _set_persist_cookie(st.session_state.persist_token)
+
+
+# Widget state must be cleared before Streamlit recreates login/account widgets
+# on the run after logout.  Keep this list explicit:
+# clearing arbitrary session keys can remove Streamlit's internal bookkeeping.
+VISITOR_WIDGET_KEYS = (
+    "login_identifier",
+    "login_password",
+    "forgot_email",
+    "reset_code_input",
+    "reset_new_password",
+    "reset_confirm_password",
+    "reg_username",
+    "reg_name",
+    "reg_email",
+    "reg_password",
+    "new_username",
+    "new_email",
+    "current_password",
+    "new_password",
+    "confirm_password",
+    "global_search_input",
+    "ai_voice_input",
+    "ai_chat_input",
+    "assistant_language_switch",
+    "medicine_web_language",
+    "medical_document_uploader",
+    "medicine_photo_uploader",
+    "medicine_camera",
+    "medicine_manual_query",
+    "medicine_web_toggle",
+    "triage_symptoms",
+    "triage_age",
+    "triage_duration",
+    "triage_severity",
+    "hospital_city",
+    "hospital_region",
+    "hospital_district",
+    "procedure_search",
+    "selected_procedure",
+    "reminder_name",
+    "reminder_form",
+    "reminder_food",
+    "reminder_time",
+    "reminder_notes",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "emergency_contact_relation",
+    "language_select",
+    "privacy_delete_confirm",
+    "accessibility_large_text",
+    "accessibility_high_contrast",
+)
+
+
+def clear_visitor_widget_state():
+    """Remove values entered by the previous visitor before widgets rerun."""
+    for key in VISITOR_WIDGET_KEYS:
+        st.session_state.pop(key, None)
+
+
+if st.session_state.pop("clear_visitor_widgets_on_next_run", False):
+    clear_visitor_widget_state()
+
+
+def clear_local_session_state():
+    """Clear credentials and every cached record belonging to one visitor."""
+    st.session_state.user_id = None
+    st.session_state.user_name = None
+    st.session_state.username = None
+    st.session_state.clear_visitor_widgets_on_next_run = True
+    st.session_state.auth_page = "login"
+    for key in ("reset_code", "reset_email", "reset_user_id", "reset_verified"):
+        st.session_state.pop(key, None)
+    st.session_state.emergency_contact = {
+        "name": "",
+        "phone": "",
+        "relation": "",
+    }
+    st.session_state.documents = []
+    st.session_state.chat_messages = []
+    st.session_state.reminders = []
+    st.session_state.activity_log = []
+    st.session_state.saved_medicines = []
+    st.session_state.notifications = []
+    st.session_state.triage_result = None
+    st.session_state.assistant_language = "English"
+    st.session_state.medicine_lookup = None
+    st.session_state.medicine_ai_summary = None
+    st.session_state.prefill_reminder = None
+    st.session_state.ai_prefill = None
+    st.session_state.ai_regenerate = False
+    st.session_state.reminder_alerts_fired = set()
+    st.session_state.active_feature = "Home"
 
 # ============================================================
 # Login / Register gate
@@ -247,33 +977,33 @@ if st.session_state.user_id is None:
             use_container_width=True
         ):
             if reg_username and reg_name and reg_email and reg_password:
-                conn = get_connection()
-                cursor = conn.cursor()
-
-                try:
-                    cursor.execute(
-                        """
-                        INSERT INTO users (username, name, email, password_hash)
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (
-                            reg_username.strip().lower(),
-                            reg_name.strip(),
-                            reg_email.strip().lower(),
-                            hash_password(reg_password)
-                        )
+                if len(reg_password) < 8:
+                    st.warning("Use a password with at least 8 characters.")
+                elif not re.fullmatch(r"[a-z0-9_]{3,30}", reg_username.strip().lower()):
+                    st.warning(
+                        "Username must be 3–30 characters using letters, numbers, or underscores."
                     )
-                    conn.commit()
-                    conn.close()
-
-                    st.success("Account created successfully. You can now login.")
-                    st.session_state.auth_page = "login"
-                    st.rerun()
-
-                except sqlite3.IntegrityError:
-                    conn.close()
-                    st.error("Username or email is already registered.")
-
+                else:
+                    username = reg_username.strip().lower()
+                    email = reg_email.strip().lower()
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO users (username, name, email, password_hash)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (username, reg_name.strip(), email, hash_password(reg_password)),
+                        )
+                        conn.commit()
+                        st.success("Account created successfully. You can now login.")
+                        st.session_state.auth_page = "login"
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Username or email is already registered.")
+                    finally:
+                        conn.close()
             else:
                 st.warning("Please fill all fields.")
 
@@ -328,60 +1058,56 @@ if st.session_state.user_id is None:
             use_container_width=True
         ):
             identifier = login_identifier.strip().lower()
-
             conn = get_connection()
             cursor = conn.cursor()
-
             cursor.execute(
                 """
-                SELECT id, username, name
+                SELECT id, username, name, password_hash
                 FROM users
-                WHERE (username = ? OR email = ?)
-                  AND password_hash = ?
+                WHERE lower(username) = ? OR lower(email) = ?
                 """,
-                (
-                    identifier,
-                    identifier,
-                    hash_password(login_password)
-                )
+                (identifier, identifier),
             )
-
             user = cursor.fetchone()
             conn.close()
 
-            if user:
+            if user and verify_password(login_password, user["password_hash"]):
+                # Upgrade legacy local SHA-256 hashes after a successful
+                # login; do not retain the old fast hash.
+                if not str(user["password_hash"]).startswith("pbkdf2_sha256$"):
+                    conn = get_connection()
+                    conn.execute(
+                        "UPDATE users SET password_hash = ? WHERE id = ?",
+                        (hash_password(login_password), user["id"]),
+                    )
+                    conn.commit()
+                    conn.close()
                 st.session_state.user_id = user["id"]
                 st.session_state.user_name = user["name"]
                 st.session_state.username = user["username"]
-
                 conn = get_connection()
                 cursor = conn.cursor()
-
                 cursor.execute(
-                    """
-                    SELECT name, phone, relation
-                    FROM emergency_contacts
-                    WHERE user_id = ?
-                    """,
-                    (user["id"],)
+                    "SELECT name, phone, relation FROM emergency_contacts WHERE user_id = ?",
+                    (user["id"],),
                 )
-
                 contact = cursor.fetchone()
                 conn.close()
-
                 st.session_state.emergency_contact = (
                     {
                         "name": contact["name"],
                         "phone": contact["phone"],
-                        "relation": contact["relation"]
+                        "relation": contact["relation"],
                     }
                     if contact
                     else {"name": "", "phone": "", "relation": ""}
                 )
-
                 st.session_state.active_feature = "Home"
+                # Remember this browser so a page reload signs them back in.
+                _new_token = issue_persist_token(user["id"])
+                if _new_token:
+                    _set_persist_cookie(_new_token)
                 st.rerun()
-
             else:
                 st.error("Invalid username/email or password.")
 
@@ -399,24 +1125,18 @@ if st.session_state.user_id is None:
                 if not forgot_email.strip():
                     st.warning("Please enter your registered email.")
                 else:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-
-                    cursor.execute(
-                        "SELECT id FROM users WHERE email = ?",
-                        (forgot_email.strip().lower(),)
+                    reset_email = forgot_email.strip().lower()
+                    reset_token = issue_local_reset_token(reset_email)
+                    # Always show the same flow so the reset step does not
+                    # disclose whether an email is registered. In a hosted
+                    # deployment this token would be delivered by email/SMS.
+                    st.session_state.reset_email = reset_email
+                    st.session_state.reset_code = reset_token
+                    st.session_state.reset_verified = False
+                    st.info(
+                        "Development reset token (valid for 15 minutes): "
+                        f"{reset_token}"
                     )
-
-                    user = cursor.fetchone()
-                    conn.close()
-
-                    if user:
-                        st.session_state.reset_email = forgot_email.strip().lower()
-                        st.session_state.reset_code = "123456"
-                        st.session_state.reset_verified = False
-                        st.success("Prototype reset code: 123456")
-                    else:
-                        st.error("No account found with this email.")
 
             if st.session_state.get("reset_code"):
                 entered_code = st.text_input(
@@ -428,11 +1148,16 @@ if st.session_state.user_id is None:
                     "Verify Code",
                     key="verify_reset_code"
                 ):
-                    if entered_code == st.session_state.reset_code:
+                    user_id = consume_local_reset_token(
+                        st.session_state.reset_email,
+                        entered_code,
+                    )
+                    if user_id is not None:
+                        st.session_state.reset_user_id = user_id
                         st.session_state.reset_verified = True
                         st.success("Code verified.")
                     else:
-                        st.error("Invalid reset code.")
+                        st.error("Invalid or expired reset code.")
 
             if st.session_state.get("reset_verified", False):
                 new_password = st.text_input(
@@ -462,12 +1187,20 @@ if st.session_state.user_id is None:
                             """
                             UPDATE users
                             SET password_hash = ?
-                            WHERE email = ?
+                            WHERE id = ?
                             """,
                             (
                                 hash_password(new_password),
-                                st.session_state.reset_email
+                                st.session_state.reset_user_id,
                             )
+                        )
+                        cursor.execute(
+                            """
+                            UPDATE password_reset_tokens
+                            SET used_at = ?
+                            WHERE user_id = ? AND used_at IS NULL
+                            """,
+                            (int(time.time()), st.session_state.reset_user_id),
                         )
 
                         conn.commit()
@@ -477,6 +1210,7 @@ if st.session_state.user_id is None:
 
                         st.session_state.pop("reset_code", None)
                         st.session_state.pop("reset_email", None)
+                        st.session_state.pop("reset_user_id", None)
                         st.session_state.pop("reset_verified", None)
 
         st.markdown(
@@ -987,17 +1721,250 @@ def find_medicine(query_text: str, medicines_df: pd.DataFrame):
     return None
 
 # ============================================================
+# Google-like medicine lookup helpers
+# ------------------------------------------------------------
+# The demo CSV only knows ~35 medicines, so a typed name is also looked up in
+# public drug databases (openFDA, RxNorm, Wikipedia).  Everything below renders
+# that result; the lookup itself lives in modules/medicine_search.py.
+# ============================================================
+
+MEDICINE_FIELD_LABELS = (
+    ("generic_name", "Generic name"),
+    ("substance", "Active substance"),
+    ("form", "Form"),
+    ("route", "How it's taken"),
+    ("manufacturer", "Manufacturer"),
+    ("term_type", "Matched as"),
+)
+
+
+def medicine_detail_rows(result):
+    """Build the (label, value) pairs that actually have something to show."""
+    rows = []
+    if result.get("purpose"):
+        rows.append(("Purpose", result["purpose"]))
+    if result.get("uses"):
+        rows.append(("What it's used for", result["uses"]))
+    if result.get("active_ingredient"):
+        rows.append(("Active ingredient", result["active_ingredient"]))
+    for key, label in MEDICINE_FIELD_LABELS:
+        value = result.get(key)
+        if value:
+            rows.append((label, value))
+    if result.get("related_names"):
+        rows.append(("Also known as", ", ".join(result["related_names"][:6])))
+    if result.get("warnings"):
+        rows.append(("Warnings", result["warnings"]))
+    if result.get("side_effects"):
+        rows.append(("Side effects", result["side_effects"]))
+    if result.get("precautions"):
+        rows.append(("Precautions", result["precautions"]))
+    if result.get("interactions"):
+        rows.append(("Interactions", result["interactions"]))
+    return rows
+
+
+def render_medicine_web_result(result, query):
+    """Show one searched medicine: facts, sources, and web links."""
+    if not result:
+        return
+
+    if not result.get("matched"):
+        st.markdown(
+            f"""
+            <div class="ms-web-result">
+                <div class="ms-medicine-title">
+                    <span class="ms-medicine-icon">?</span>
+                    <div>
+                        <span>No database match</span>
+                        <h2>{safe_text(query)}</h2>
+                    </div>
+                </div>
+                <p class="ms-web-note">
+                    None of the public medicine databases recognise this exact
+                    name. It may be an Indian brand, a local formulation, or a
+                    spelling mistake — use the web links below to check, or ask
+                    the AI Assistant.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        confidence = result.get("confidence")
+        banner = ""
+        if confidence == "partial":
+            banner = (
+                "<p class='ms-web-note ms-web-note-warn'>Closest database match, "
+                "not an exact name match — check that this is really the "
+                "medicine you searched for.</p>"
+            )
+        image = ""
+        if result.get("image_url"):
+            image = (
+                f"<img class='ms-web-image' src=\"{safe_text(result['image_url'])}\" "
+                f"alt=\"{safe_text(result.get('wiki_title') or query)}\" />"
+            )
+        rows = "".join(
+            f"<div><b>{safe_text(label)}</b><span>{safe_text(value)}</span></div>"
+            for label, value in medicine_detail_rows(result)
+        )
+        source_line = " + ".join(result.get("sources") or [])
+        summary_html = ""
+        if result.get("description"):
+            summary_html = (
+                "<div class='ms-web-summary'>"
+                + safe_text(result["description"])
+                + "</div>"
+            )
+        st.markdown(
+            f"""
+            <div class="ms-web-result">
+                <div class="ms-medicine-title">
+                    <span class="ms-medicine-icon">M</span>
+                    <div>
+                        <span>Medicine information from {safe_text(source_line)}</span>
+                        <h2>{safe_text(result.get('display_name') or query)}</h2>
+                    </div>
+                    {image}
+                </div>
+                {banner}
+                {summary_html}
+                <div class="ms-medicine-grid">{rows}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.caption(
+        "Reference information from openFDA (US drug labels), RxNorm (NIH), and "
+        "Wikipedia. It is general information, not advice about your own "
+        "treatment, and it never includes a dosage for you to follow."
+    )
+
+    # The "search it anywhere" links — this is what makes it behave like a
+    # general web search rather than a closed demo database.
+    st.markdown("**🌐 Search this medicine anywhere**")
+    for link in result.get("web_links") or []:
+        st.markdown(
+            f"""
+            <a class="ms-web-link" href="{safe_text(link['url'])}" target="_blank"
+               rel="noopener noreferrer">
+                <strong>{safe_text(link['label'])}</strong>
+                <span>{safe_text(link['hint'])}</span>
+            </a>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_medicine_ai_summary(result, query):
+    """Ask the assistant to explain the searched medicine in the user's language.
+
+    This is what covers the names no public database has (many Indian brands)
+    and it reuses the same reply-language switch as the AI Assistant, so the
+    explanation comes back in English, Hindi, or Telugu.
+    """
+    language_name = st.session_state.assistant_language
+    native = ASSISTANT_LANGUAGES[language_name]["native"]
+    assistant_label = assistant_ui(language_name)["assistant"]
+
+    st.markdown("---")
+    st.markdown(f"**🤖 Explain this medicine in {native}**")
+
+    if not GROQ_LIB_AVAILABLE or GROQ_API_KEY is None:
+        st.caption(
+            "Add a Groq API key to get a plain-language explanation in your "
+            "language."
+        )
+        return
+
+    cached = st.session_state.get("medicine_ai_summary")
+    if cached and cached.get("query") == query and cached.get("language") == language_name:
+        st.markdown(
+            f"""
+            <div class="ai-message ai-assistant-message">
+                <div class="ai-message-label">{safe_text(assistant_label)}</div>
+                <div>{safe_text(cached["text"])}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    if st.button(f"Explain in {native}", key="medicine_explain_btn", type="primary"):
+        summary_loading = st.empty()
+        summary_loading.markdown(
+            f"""
+            <div class="ms-inline-loader ms-ai-loader">
+                <div class="ms-loading-content">
+                    <div class="ms-spinner"></div>
+                    <p>{safe_text(assistant_ui(language_name)["thinking"])}</p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        summary = ""
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            response = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": ASSISTANT_SAFETY_RULES,
+                    },
+                    {
+                        "role": "user",
+                        "content": build_medicine_prompt(query, result, language_name),
+                    },
+                ],
+                max_tokens=320,
+                temperature=0.3,
+            )
+            summary = (response.choices[0].message.content or "").strip()
+        except Exception as exc:
+            summary_loading.empty()
+            st.error(f"Could not generate the explanation: {exc}")
+        summary_loading.empty()
+        if summary:
+            st.session_state.medicine_ai_summary = {
+                "query": query,
+                "language": language_name,
+                "text": summary,
+            }
+            st.rerun()
+
+# ============================================================
 # Session state (feature data — separate from auth state above)
 # ============================================================
 
 if "documents" not in st.session_state:
-    st.session_state.documents = []           # uploaded document metadata (session-only)
+    st.session_state.documents = []           # uploaded document metadata (from the local database)
 
 if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = []        # AI assistant conversation (session-only)
+    st.session_state.chat_messages = []        # AI assistant conversation
+
+# Reply language for the AI assistant.  It follows the sidebar language on the
+# first visit and can then be switched on its own from the assistant screen.
+if "assistant_language" not in st.session_state:
+    st.session_state.assistant_language = "English"
+
+if "assistant_language_manual" not in st.session_state:
+    # False while the assistant still mirrors the sidebar language.
+    st.session_state.assistant_language_manual = False
+
+if "medicine_lookup" not in st.session_state:
+    # {"query", "language", "result"} for the last typed-medicine web search.
+    st.session_state.medicine_lookup = None
+
+if "medicine_ai_summary" not in st.session_state:
+    # Cached AI summary so switching the reply language does not re-query.
+    st.session_state.medicine_ai_summary = None
 
 if "reminders" not in st.session_state:
-    st.session_state.reminders = []            # medication reminders (session-only)
+    st.session_state.reminders = []            # medication reminders
 
 if "active_feature" not in st.session_state:
     st.session_state.active_feature = "Home"
@@ -1017,6 +1984,215 @@ if "accessibility_large_text" not in st.session_state:
 if "accessibility_high_contrast" not in st.session_state:
     st.session_state.accessibility_high_contrast = False
 
+
+def _format_stored_timestamp(value):
+    """Show a stored upload time the same way the upload itself records it."""
+    if not value:
+        return ""
+    try:
+        return datetime.datetime.fromisoformat(str(value)).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def load_local_user_data():
+    """Load persistent records from the local SQLite database once per visitor.
+
+    Each group is loaded independently, so one unreadable or missing table
+    reports itself instead of blanking out the visitor's other records.
+    """
+    if not st.session_state.user_id:
+        return
+
+    user_id = st.session_state.user_id
+
+    def query(sql, params, label, default):
+        conn = get_connection()
+        try:
+            return conn.execute(sql, params).fetchall()
+        except Exception as exc:
+            st.warning(f"Could not load your {label}: {exc}")
+            return default
+        finally:
+            conn.close()
+
+    # Load emergency contact
+    contact = query(
+        "SELECT name, phone, relation FROM emergency_contacts WHERE user_id = ?",
+        (user_id,),
+        "emergency contact",
+        [],
+    )
+    contact = contact[0] if contact else None
+    st.session_state.emergency_contact = (
+        {
+            "name": contact["name"],
+            "phone": contact["phone"],
+            "relation": contact["relation"],
+        }
+        if contact
+        else {"name": "", "phone": "", "relation": ""}
+    )
+
+    # Load documents
+    docs = query(
+        "SELECT id, filename, file_type, size_bytes, uploaded_at FROM documents WHERE user_id = ? ORDER BY uploaded_at DESC",
+        (user_id,),
+        "documents",
+        [],
+    )
+    st.session_state.documents = [
+        {
+            "id": doc["id"],
+            "name": doc["filename"],
+            "file_type": doc["file_type"],
+            "size_kb": round(float(doc["size_bytes"] or 0) / 1024, 1),
+            "uploaded_on": _format_stored_timestamp(doc["uploaded_at"]),
+        }
+        for doc in docs
+    ]
+
+    # Load chat history
+    chats = query(
+        # created_at only has one-second resolution, so a question and its reply
+        # saved in the same second would tie; id breaks the tie into send order.
+        "SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY created_at ASC, id ASC",
+        (user_id,),
+        "chat history",
+        [],
+    )
+    st.session_state.chat_messages = [
+        {"role": chat["role"], "content": chat["message"]}
+        for chat in chats
+        if chat["message"]
+    ]
+
+    # Load reminders
+    reminders = query(
+        "SELECT id, medicine_name, form, reminder_time, food_timing, notes FROM reminders WHERE user_id = ? ORDER BY reminder_time ASC",
+        (user_id,),
+        "reminders",
+        [],
+    )
+    st.session_state.reminders = [
+        {
+            "name": rem["medicine_name"],
+            "form": rem["form"],
+            "food": rem["food_timing"],
+            "time": datetime.datetime.strptime(rem["reminder_time"], "%H:%M:%S").time() if rem["reminder_time"] else datetime.time(9, 0),
+            "notes": rem["notes"],
+            "id": rem["id"],
+        }
+        for rem in reminders
+    ]
+
+    # Load saved medicines
+    saved = query(
+        "SELECT medicine_name FROM saved_medicines WHERE user_id = ? ORDER BY created_at ASC",
+        (user_id,),
+        "saved medicines",
+        [],
+    )
+    st.session_state.saved_medicines = [s["medicine_name"] for s in saved]
+
+
+# ============================================================
+# Local SQLite writes
+# ------------------------------------------------------------
+# These are the write half of load_local_user_data above: anything read
+# back on the next visit has to be written here, or it is lost on reload.
+# Each helper reports its own failure and returns None, so a write problem
+# degrades to a warning instead of taking the whole page down.
+# ============================================================
+
+def _write(sql, params, label):
+    conn = get_connection()
+    try:
+        cursor = conn.execute(sql, params)
+        conn.commit()
+        return cursor.lastrowid
+    except Exception as exc:
+        st.warning(f"Could not save your {label}: {exc}")
+        return None
+    finally:
+        conn.close()
+
+
+def save_chat_message(role, content):
+    return _write(
+        "INSERT INTO chat_history (user_id, role, message) VALUES (?, ?, ?)",
+        (st.session_state.user_id, role, content),
+        "chat message",
+    )
+
+
+def update_last_chat_message(content):
+    """Replace the newest stored message, used when a reply is translated."""
+    _write(
+        """UPDATE chat_history SET message = ?
+           WHERE id = (SELECT id FROM chat_history WHERE user_id = ? ORDER BY id DESC LIMIT 1)""",
+        (content, st.session_state.user_id),
+        "chat message",
+    )
+
+
+def delete_last_chat_message():
+    _write(
+        """DELETE FROM chat_history
+           WHERE id = (SELECT id FROM chat_history WHERE user_id = ? ORDER BY id DESC LIMIT 1)""",
+        (st.session_state.user_id,),
+        "chat message",
+    )
+
+
+def clear_stored_chat():
+    _write(
+        "DELETE FROM chat_history WHERE user_id = ?",
+        (st.session_state.user_id,),
+        "chat history",
+    )
+
+
+def save_reminder(name, form, food, reminder_time, notes):
+    return _write(
+        """INSERT INTO reminders
+           (user_id, medicine_name, form, food_timing, reminder_time, notes)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (st.session_state.user_id, name, form, food, reminder_time, notes),
+        "reminder",
+    )
+
+
+def delete_all_reminders():
+    _write(
+        "DELETE FROM reminders WHERE user_id = ?",
+        (st.session_state.user_id,),
+        "reminders",
+    )
+
+
+def save_document(filename, file_type, size_bytes):
+    return _write(
+        """INSERT INTO documents (user_id, filename, file_type, file_path, size_bytes)
+           VALUES (?, ?, ?, ?, ?)""",
+        # No Storage bucket behind this app, so there is no remote path to keep.
+        (st.session_state.user_id, filename, file_type, None, size_bytes),
+        "document",
+    )
+
+
+def clear_stored_documents():
+    _write(
+        "DELETE FROM documents WHERE user_id = ?",
+        (st.session_state.user_id,),
+        "documents",
+    )
+
+
+# Load local user data
+load_local_user_data()
+
+
 def log_activity(title, kind="Activity", detail=""):
     event = {
         "title": title,
@@ -1027,6 +2203,7 @@ def log_activity(title, kind="Activity", detail=""):
     st.session_state.activity_log.insert(0, event)
     st.session_state.activity_log = st.session_state.activity_log[:30]
 
+
 def add_notification(message, kind="info"):
     st.session_state.notifications.insert(0, {
         "message": message,
@@ -1034,6 +2211,7 @@ def add_notification(message, kind="info"):
         "time": datetime.datetime.now().strftime("%b %d, %I:%M %p")
     })
     st.session_state.notifications = st.session_state.notifications[:20]
+
 
 def get_recent_triage(limit=5):
     try:
@@ -1048,8 +2226,26 @@ def get_recent_triage(limit=5):
     except Exception:
         return pd.DataFrame()
 
+
 def safe_text(value):
-    return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """Escape user/database/model text before inserting it into raw HTML."""
+    return escape(str(value), quote=True)
+
+
+def logout_user():
+    drop_persist_token()
+    clear_local_session_state()
+    st.session_state.user_id = None
+    st.session_state.user_name = None
+    st.session_state.username = None
+    st.session_state.emergency_contact = {"name": "", "phone": "", "relation": ""}
+    st.session_state.documents = []
+    st.session_state.chat_messages = []
+    st.session_state.reminders = []
+    st.session_state.activity_log = []
+    st.session_state.saved_medicines = []
+    st.session_state.active_feature = "Home"
+
 
 # ============================================================
 # Sidebar — Account, Language, Emergency Contact
@@ -1087,6 +2283,7 @@ with st.sidebar:
             type="primary" if is_active else "secondary",
         ):
             st.session_state.active_feature = page_name
+            save_persist_ui_state()
             st.rerun()
 
     st.markdown("""<div class='ms-sidebar-emergency'><div class='ms-emergency-icon'>🚑</div><div><strong>Emergency</strong><span>Call 108</span></div></div>""", unsafe_allow_html=True)
@@ -1098,10 +2295,7 @@ with st.sidebar:
     st.write(f"Logged in as **{st.session_state.user_name}**")
 
     if st.button("Logout"):
-        st.session_state.user_id = None
-        st.session_state.user_name = None
-        st.session_state.username = None
-        st.session_state.emergency_contact = {"name": "", "phone": "", "relation": ""}
+        logout_user()
         st.rerun()
 
     with st.expander("Account Settings"):
@@ -1113,8 +2307,10 @@ with st.sidebar:
             cleaned = new_username.strip().lower()
             if not cleaned:
                 st.error("Username cannot be empty.")
-            elif len(cleaned) < 3:
-                st.error("Username must be at least 3 characters.")
+            elif not re.fullmatch(r"[a-z0-9_]{3,30}", cleaned):
+                st.error(
+                    "Username must be 3–30 characters using letters, numbers, or underscores."
+                )
             else:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -1168,7 +2364,7 @@ with st.sidebar:
                 cursor.execute("SELECT password_hash FROM users WHERE id = ?", (st.session_state.user_id,))
                 user = cursor.fetchone()
 
-                if user and user["password_hash"] == hash_password(current_password):
+                if user and verify_password(current_password, user["password_hash"]):
                     cursor.execute(
                         "UPDATE users SET password_hash = ? WHERE id = ?",
                         (hash_password(new_password), st.session_state.user_id)
@@ -1182,8 +2378,14 @@ with st.sidebar:
     st.divider()
 
     # -------------------- Language --------------------
-    language = st.selectbox("Language", list(TRANSLATIONS.keys()))
+    language = st.selectbox("Language", list(TRANSLATIONS.keys()), key="language_select")
     T = TRANSLATIONS[language]
+
+    # Follow the app language with the assistant's reply language until the
+    # user picks a language on the assistant screen itself, after which their
+    # own choice wins.
+    if not st.session_state.get("assistant_language_manual"):
+        st.session_state.assistant_language = assistant_language_name(language)
 
     st.divider()
 
@@ -1191,9 +2393,21 @@ with st.sidebar:
     st.subheader(T["emergency_contact"].replace("", ""))
 
     with st.form("emergency_contact_form"):
-        ec_name = st.text_input("Contact Name", value=st.session_state.emergency_contact["name"])
-        ec_phone = st.text_input("Contact Phone", value=st.session_state.emergency_contact["phone"])
-        ec_relation = st.text_input("Relation", value=st.session_state.emergency_contact["relation"])
+        ec_name = st.text_input(
+            "Contact Name",
+            value=st.session_state.emergency_contact["name"],
+            key="emergency_contact_name",
+        )
+        ec_phone = st.text_input(
+            "Contact Phone",
+            value=st.session_state.emergency_contact["phone"],
+            key="emergency_contact_phone",
+        )
+        ec_relation = st.text_input(
+            "Relation",
+            value=st.session_state.emergency_contact["relation"],
+            key="emergency_contact_relation",
+        )
         saved = st.form_submit_button("Save Contact")
 
         if saved:
@@ -1208,18 +2422,22 @@ with st.sidebar:
             )
             conn.commit()
             conn.close()
-
             st.session_state.emergency_contact = {"name": ec_name, "phone": ec_phone, "relation": ec_relation}
             st.success("Emergency contact saved successfully!")
 
     if st.session_state.emergency_contact["name"]:
+        contact_name = safe_text(st.session_state.emergency_contact["name"])
+        contact_relation = safe_text(st.session_state.emergency_contact["relation"])
+        contact_phone_display = safe_text(st.session_state.emergency_contact["phone"])
+        contact_phone_href = quote(
+            str(st.session_state.emergency_contact["phone"]).strip(), safe="+"
+        )
         st.markdown(
             f"""
             <div class="emergency-box">
-            <b>Your contact:</b> {st.session_state.emergency_contact['name']}
-            ({st.session_state.emergency_contact['relation']})<br>
-            <a href="tel:{st.session_state.emergency_contact['phone']}">
-            {st.session_state.emergency_contact['phone']}</a>
+            <b>Your contact:</b> {contact_name}
+            ({contact_relation})<br>
+            <a href="tel:{contact_phone_href}">{contact_phone_display}</a>
             </div>
             """,
             unsafe_allow_html=True
@@ -1379,10 +2597,16 @@ if st.session_state.reminders:
     if "reminder_alerts_fired" not in st.session_state:
         st.session_state.reminder_alerts_fired = set()
 
+    _today_key = datetime.datetime.now().astimezone().date().isoformat()
     _now_key = datetime.datetime.now().strftime("%H:%M")
-    for _rem in st.session_state.reminders:
+    for _index, _rem in enumerate(st.session_state.reminders):
+        _rem_id = str(_rem.get("id") or f"{_index}:{_rem.get('name', '')}")
         _rem_key = _rem["time"].strftime("%H:%M")
-        if _rem_key == _now_key and _rem_key not in st.session_state.reminder_alerts_fired:
+        _occurrence_key = f"{_today_key}|{_rem_id}|{_rem_key}"
+        if (
+            _rem_key == _now_key
+            and _occurrence_key not in st.session_state.reminder_alerts_fired
+        ):
             add_notification(
                 f"⏰ Medication reminder due now: {_rem['name']}",
                 "warning"
@@ -1393,17 +2617,19 @@ if st.session_state.reminders:
                 _rem["time"].strftime("%I:%M %p")
             )
             st.toast(f"⏰ {_rem['name']} — time to take your medicine", icon="⏰")
-            st.session_state.reminder_alerts_fired.add(_rem_key)
+            st.session_state.reminder_alerts_fired.add(_occurrence_key)
 
     _reminders_js = json.dumps(
         [
             {
+                "id": str(r.get("id") or index),
                 "t": r["time"].strftime("%H:%M"),
-                "name": r["name"],
+                "name": str(r.get("name", "")),
             }
-            for r in st.session_state.reminders
-        ]
-    )
+            for index, r in enumerate(st.session_state.reminders)
+        ],
+        ensure_ascii=True,
+    ).replace("</", "<\\/")
 
     components.html(
         """
@@ -1451,26 +2677,25 @@ if st.session_state.reminders:
                     });
                 } catch (e) {}
             }
-            function dueInfo(hm) {
-                var list = [];
-                reminders.forEach(function (r) { if (r.t === hm) list.push(r.name); });
-                return list;
+            function dueItems(hm) {
+                return reminders.filter(function (r) { return r.t === hm; });
             }
             function render(hm) {
-                var dl = dueInfo(hm);
-                if (dl.length) {
+                var due = dueItems(hm);
+                if (due.length) {
                     strip.className = "due";
-                    strip.innerHTML = "🔔 TIME TO TAKE YOUR MEDICINE — <b>" + dl.join(", ") + "</b>";
+                    strip.textContent = "🔔 TIME TO TAKE YOUR MEDICINE — " +
+                        due.map(function (r) { return r.name; }).join(", ");
                     return;
                 }
                 var next = null;
                 reminders.forEach(function (r) { if (r.t > hm && (!next || r.t < next.t)) next = r; });
                 if (next) {
                     strip.className = "";
-                    strip.innerHTML = "⏰ Next reminder: <b>" + next.name + "</b> at " + fmt(next.t);
+                    strip.textContent = "⏰ Next reminder: " + next.name + " at " + fmt(next.t);
                 } else if (reminders.length) {
                     strip.className = "";
-                    strip.innerHTML = "⏰ " + reminders.length + " reminder" +
+                    strip.textContent = "⏰ " + reminders.length + " reminder" +
                         (reminders.length > 1 ? "s" : "") + " set for today — you'll be alerted when one is due.";
                 } else {
                     strip.style.display = "none";
@@ -1479,9 +2704,11 @@ if st.session_state.reminders:
             function check() {
                 var d = new Date();
                 var hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
-                var dl = dueInfo(hm);
-                if (dl.length && !fired[hm]) {
-                    fired[hm] = true;
+                var due = dueItems(hm);
+                var occurrenceKey = dayKey + "|" + hm + "|" +
+                    due.map(function (r) { return r.id; }).join(",");
+                if (due.length && !fired[occurrenceKey]) {
+                    fired[occurrenceKey] = true;
                     beep();
                 }
                 render(hm);
@@ -1591,7 +2818,8 @@ if active_feature == "Profile":
         if st.button("Privacy center", use_container_width=True): st.session_state.active_feature = "Privacy & Security"
     with a3:
         if st.button("Logout", use_container_width=True):
-            st.session_state.user_id = None; st.session_state.user_name = None; st.session_state.username = None; st.rerun()
+            logout_user()
+            st.rerun()
 
 # ============================================================
 # NOTIFICATIONS
@@ -1612,29 +2840,45 @@ if active_feature == "Notifications":
 # ============================================================
 if active_feature == "Privacy & Security":
     st.markdown("<div class='ms-page-enter'><h2>Privacy & Security</h2><p class='ms-page-subtitle'>Understand and control the data used by this prototype.</p></div>", unsafe_allow_html=True)
-    st.markdown("<div class='ms-privacy-grid'><div class='ms-privacy-card'><strong>Account protected</strong><span>Your login is stored in the local application database.</span></div><div class='ms-privacy-card'><strong>Health records</strong><span>Your triage history is associated with your account.</span></div><div class='ms-privacy-card'><strong>Documents</strong><span>Uploaded documents in this prototype are session-only.</span></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='ms-privacy-grid'><div class='ms-privacy-card'><strong>Local records</strong><span>Your triage history, reminders, chat, contacts and saved medicines are stored in this app's local database, tied to your account.</span></div><div class='ms-privacy-card'><strong>Passwords</strong><span>Passwords are salted and hashed with PBKDF2-HMAC-SHA256 before they are stored, so the original password is never saved.</span></div><div class='ms-privacy-card'><strong>Documents</strong><span>Only each upload's name, type and size are stored — the file contents are never saved or read.</span></div></div>", unsafe_allow_html=True)
     st.markdown("### Manage Data")
-    if st.button("Clear session documents & activity"):
-        st.session_state.documents = []; st.session_state.activity_log = []; st.success("Session data cleared.")
+    if st.button("Clear stored documents & chat"):
+        clear_stored_documents()
+        clear_stored_chat()
+        st.session_state.documents = []
+        st.session_state.chat_messages = []
+        st.success("Stored documents and chat cleared.")
     st.markdown("### Delete Account")
-    confirm = st.checkbox("I understand that deleting my account removes my saved account records.")
+    confirm = st.checkbox(
+        "I understand that deleting my account removes my saved account records.",
+        key="privacy_delete_confirm",
+    )
     if st.button("Delete my account", type="secondary", disabled=not confirm):
         conn = get_connection(); cur = conn.cursor()
         for table in ["triage_history", "emergency_contacts", "medicine_scans", "reminders", "documents", "chat_history", "sessions"]:
             try: cur.execute(f"DELETE FROM {table} WHERE user_id = ?", (st.session_state.user_id,))
             except Exception: pass
         cur.execute("DELETE FROM users WHERE id = ?", (st.session_state.user_id,)); conn.commit(); conn.close()
-        st.session_state.user_id = None; st.session_state.user_name = None; st.session_state.username = None
+        logout_user()
         st.rerun()
-    st.caption("This is a coursework prototype. For real deployment, use strong password hashing, encrypted storage, access controls and a reviewed privacy policy.")
+    st.caption("For a real deployment, review your privacy policy, retention rules, and healthcare-data requirements with a qualified professional.")
 
 # ============================================================
 # ACCESSIBILITY
 # ============================================================
 if active_feature == "Accessibility":
     st.markdown("<div class='ms-page-enter'><h2>Accessibility</h2><p class='ms-page-subtitle'>Adjust the interface for easier reading and navigation.</p></div>", unsafe_allow_html=True)
-    st.session_state.accessibility_large_text = st.toggle("Larger text", value=st.session_state.accessibility_large_text)
-    st.session_state.accessibility_high_contrast = st.toggle("High contrast", value=st.session_state.accessibility_high_contrast)
+    # These two keys are the widgets' own keys, and Streamlit has already
+    # written each toggle's value into st.session_state by the time it
+    # returns. Writing the return value back to the same key would raise
+    # StreamlitWidgetAlreadyInstantiatedError, so the widgets are called
+    # for their side effect only. The flags are read near the top of the
+    # run, before this page is reached, so the CSS is already applied for
+    # whatever they now hold.
+    st.toggle("Larger text", key="accessibility_large_text")
+    st.toggle("High contrast", key="accessibility_high_contrast")
+    # Save the preferences just toggled, so they outlive a page reload.
+    save_persist_ui_state()
     st.markdown("Keyboard-friendly Streamlit controls and visible labels are used throughout the interface.")
 
 # ============================================================
@@ -1788,17 +3032,23 @@ if active_feature == "Triage":
         symptoms = st.text_area(
             T["describe_symptoms"],
             placeholder="Example: I have fever and cough for 3 days...",
-            height=120
+            height=120,
+            key="triage_symptoms",
         )
 
-        age = st.number_input(T["age"], min_value=1, max_value=120, value=22)
+        age = st.number_input(
+            T["age"], min_value=1, max_value=120, value=22, key="triage_age"
+        )
 
         duration = st.text_input(
             T["duration_q"],
-            placeholder="Example: 3 days"
+            placeholder="Example: 3 days",
+            key="triage_duration",
         )
 
-        severity = st.selectbox(T["severity_q"], ["Mild", "Moderate", "Severe"])
+        severity = st.selectbox(
+            T["severity_q"], ["Mild", "Moderate", "Severe"], key="triage_severity"
+        )
 
         st.caption(
             "Analysis runs instantly once warmed up; on a freshly-started cloud "
@@ -1857,7 +3107,7 @@ if active_feature == "Triage":
                                 matched_tip = tip
                                 break
 
-                        # ---- Save this check to the database ----
+                        # ---- Save this check to the local database ----
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute(
@@ -1910,7 +3160,8 @@ if active_feature == "Hospital Finder":
             T["select_city"],
             sorted(price_data["city"].dropna().unique()),
             index=0,
-            placeholder="Choose a city..."
+            placeholder="Choose a city...",
+            key="hospital_city",
         )
 
         city_data = price_data[price_data["city"] == selected_city]
@@ -1923,7 +3174,8 @@ if active_feature == "Hospital Finder":
                 T["select_region"],
                 available_regions,
                 index=0,
-                placeholder="Choose a revenue district..."
+                placeholder="Choose a revenue district...",
+                key="hospital_region",
             )
             region_data = city_data[city_data["region"] == selected_region]
         else:
@@ -1934,7 +3186,8 @@ if active_feature == "Hospital Finder":
             T["select_district"],
             sorted(region_data["district"].dropna().unique()),
             index=0,
-            placeholder="Choose a district / mandal..."
+            placeholder="Choose a district / mandal...",
+            key="hospital_district",
         )
 
         # -------- Procedure (search + select) --------
@@ -1942,7 +3195,8 @@ if active_feature == "Hospital Finder":
 
         procedure_search = st.text_input(
             "🔍 Search Medical Test / Procedure",
-            placeholder="Type to search — e.g. 'MRI', 'Blood', 'Scan'..."
+            placeholder="Type to search — e.g. 'MRI', 'Blood', 'Scan'...",
+            key="procedure_search",
         )
 
         if procedure_search.strip():
@@ -1962,7 +3216,8 @@ if active_feature == "Hospital Finder":
             T["select_procedure"],
             matched_procedures,
             index=0,
-            placeholder="Choose a medical test or procedure..."
+            placeholder="Choose a medical test or procedure...",
+            key="selected_procedure",
         )
 
         # Scoped to the selected revenue district (not the whole city) so
@@ -2144,14 +3399,14 @@ if active_feature == "Medicine Scanner":
     if medicines_df is not None:
 
         st.caption(
-            "This looks up medicines in a small demo database "
-            f"({len(medicines_df)} entries) — it will not recognize medicines "
-            "outside that list, and OCR can misread a blurry or angled photo. "
-            "Always double-check with a pharmacist before taking anything."
+            "Photo scanning checks a small demo database "
+            f"({len(medicines_df)} entries) and OCR can misread a blurry or "
+            "angled photo. Typing a name searches that list first and then the "
+            "web, so almost any medicine can be found. Always double-check with "
+            "a pharmacist before taking anything."
         )
 
         matched_medicine = None
-
         col_cam, col_manual = st.columns(2)
 
         with col_cam:
@@ -2165,9 +3420,13 @@ if active_feature == "Medicine Scanner":
                     "(it's separate from the pip package)."
                 )
             else:
-                photo = st.camera_input("Take a photo of the medicine strip/box")
+                photo = st.camera_input(
+                    "Take a photo of the medicine strip/box", key="medicine_camera"
+                )
                 uploaded_photo = st.file_uploader(
-                    "...or upload a photo instead", type=["png", "jpg", "jpeg"]
+                    "...or upload a photo instead",
+                    type=["png", "jpg", "jpeg"],
+                    key="medicine_photo_uploader",
                 )
                 image_source = photo or uploaded_photo
 
@@ -2194,6 +3453,23 @@ if active_feature == "Medicine Scanner":
                             st.text(extracted_text if extracted_text.strip() else "(nothing detected)")
 
                         matched_medicine = find_medicine(extracted_text, medicines_df)
+                        
+                        # If web search is enabled, also search public databases
+                        # using the extracted text as the query
+                        web_lookup_on = st.session_state.get("medicine_web_toggle", True)
+                        if web_lookup_on and extracted_text.strip():
+                            with st.spinner("Searching public medicine databases for scanned text..."):
+                                st.session_state.medicine_lookup = {
+                                    "query": extracted_text.strip()[:200],
+                                    "web": True,
+                                    "language": assistant_code(st.session_state.assistant_language),
+                                    "result": search_medicine(
+                                        extracted_text.strip()[:200],
+                                        assistant_code(st.session_state.assistant_language)
+                                    ),
+                                }
+                                st.session_state.medicine_lookup["language"] = assistant_code(st.session_state.assistant_language)
+                            st.session_state.medicine_ai_summary = None
 
                         if matched_medicine is None:
                             st.warning(
@@ -2215,14 +3491,73 @@ if active_feature == "Medicine Scanner":
 
         with col_manual:
             st.markdown("**⌨️ Or Type the Medicine Name**")
+            st.caption(
+                "Searches public medicine databases (openFDA, RxNorm, Wikipedia) "
+                "for almost any medicine name — Indian brands, prescription drugs, etc. "
+                "The demo list is checked as a fast offline supplement."
+            )
             manual_query = st.text_input(
                 "Medicine name",
-                placeholder="e.g. Paracetamol, Dolo 650, Amoxicillin..."
+                placeholder="e.g. Paracetamol, Dolo 650, Augmentin, Meftal-P...",
+                key="medicine_manual_query",
             )
-            if st.button(T["scan_medicine_btn"]) and manual_query.strip():
+            search_cols = st.columns([2, 1])
+            with search_cols[0]:
+                run_medicine_search = st.button(
+                    T["scan_medicine_btn"],
+                    type="primary",
+                    use_container_width=True,
+                )
+            with search_cols[1]:
+                web_lookup_on = st.toggle(
+                    "Search the web",
+                    value=True,
+                    key="medicine_web_toggle",
+                    help=(
+                        "Also look the name up in openFDA, RxNorm, and "
+                        "Wikipedia. Turn this off to use only the demo list."
+                    ),
+                )
+
+            if run_medicine_search and manual_query.strip():
+                typed_name = manual_query.strip()
+
+                # Always check the local demo database first (fast, offline)
                 matched_medicine = find_medicine(manual_query, medicines_df)
-                if matched_medicine is None:
-                    st.warning("No close match found in the demo database.")
+                
+                # The lookup result is cached in the session so it survives
+                # reruns (and language switches) without hitting the network
+                # again.
+                st.session_state.medicine_lookup = {
+                    "query": typed_name,
+                    "web": web_lookup_on,
+                    "language": assistant_code(st.session_state.assistant_language),
+                    "result": None,
+                }
+                st.session_state.medicine_ai_summary = None
+                
+                # If web search is enabled, search public databases immediately
+                # This allows finding almost any medicine name (Indian brands, etc.)
+                if web_lookup_on:
+                    with st.spinner(f"Searching public medicine databases for {typed_name}..."):
+                        st.session_state.medicine_lookup["result"] = search_medicine(
+                            typed_name, 
+                            assistant_code(st.session_state.assistant_language)
+                        )
+                        st.session_state.medicine_lookup["language"] = assistant_code(st.session_state.assistant_language)
+                    
+                    web_result = st.session_state.medicine_lookup["result"]
+                    if not web_result.get("matched") and matched_medicine is None:
+                        st.warning(
+                            "No match found in public databases or the demo list. "
+                            "Try checking the spelling or use the web links below."
+                        )
+                    elif matched_medicine is None:
+                        st.info(
+                            "Found in public medicine databases. See web results below."
+                        )
+                elif matched_medicine is None:
+                    st.warning("No close match found in the demo database. Enable 'Search the web' to search public databases.")
 
         if matched_medicine is not None:
             med_name = str(matched_medicine['name'])
@@ -2237,10 +3572,52 @@ if active_feature == "Medicine Scanner":
             with mc2:
                 if st.button("Save to Medicines", key="med_save", use_container_width=True):
                     if med_name not in st.session_state.saved_medicines:
+                        conn = get_connection()
+                        try:
+                            # The unique index makes a repeat save a no-op
+                            # instead of a duplicate row.
+                            conn.execute(
+                                "INSERT OR IGNORE INTO saved_medicines (user_id, medicine_name) VALUES (?, ?)",
+                                (st.session_state.user_id, med_name),
+                            )
+                            conn.commit()
+                        finally:
+                            conn.close()
                         st.session_state.saved_medicines.append(med_name)
                         log_activity(f"{med_name} saved", "Medicine", "Saved medicine")
                         add_notification("Medicine saved successfully", "success")
-                    st.success("Medicine saved to your list.")
+                        st.success("Medicine saved to your list.")
+
+        # -------------------- Web search result --------------------
+        # Rendered outside the two columns so it gets the full page width, and
+        # re-rendered from session state on every rerun.
+        lookup = st.session_state.get("medicine_lookup")
+        if lookup and lookup.get("query"):
+            lookup_query = lookup["query"]
+            lookup_language = assistant_code(st.session_state.assistant_language)
+            st.divider()
+            st.subheader(f"🌐 Web results for “{lookup_query}”")
+
+            if lookup.get("web"):
+                # Changing the reply language re-runs the lookup, because
+                # Wikipedia is searched in that language first.
+                if (
+                    lookup.get("result") is None
+                    or lookup.get("language") != lookup_language
+                ):
+                    with st.spinner(f"Searching public medicine databases for {lookup_query}..."):
+                        lookup["result"] = search_medicine(
+                            lookup_query, lookup_language
+                        )
+                    lookup["language"] = lookup_language
+                web_result = lookup["result"]
+                render_medicine_web_result(web_result, lookup_query)
+                render_medicine_ai_summary(web_result, lookup_query)
+            else:
+                st.caption(
+                    "Web search was off for this lookup, so only the demo "
+                    "database above was used."
+                )
 
 # ============================================================
 # TAB 4 — AI Assistant & Medication Reminders
@@ -2248,13 +3625,38 @@ if active_feature == "Medicine Scanner":
 
 if active_feature == "AI Assistant":
 
+    # ---------------- Reply language switch ----------------
+    # The app language only sets the starting point; from here the user can
+    # switch between English, Hindi, and Telugu on this screen alone.
+    language_options = list(ASSISTANT_LANGUAGES.keys())
+    if st.session_state.assistant_language not in language_options:
+        st.session_state.assistant_language = "English"
+    # Label the switch in the language currently in use, so a user who has
+    # already switched to Telugu does not have to read English to switch back.
+    reply_language = st.selectbox(
+        assistant_ui(st.session_state.assistant_language)["reply_language"],
+        language_options,
+        index=language_options.index(st.session_state.assistant_language),
+        key="assistant_language_switch",
+        format_func=lambda name: ASSISTANT_LANGUAGES[name]["native"],
+    )
+    if reply_language != st.session_state.assistant_language:
+        # A language change invalidates any cached medicine summary, because
+        # that text is written in the previous language.
+        st.session_state.assistant_language = reply_language
+        st.session_state.assistant_language_manual = True
+        st.session_state.medicine_ai_summary = None
+
+    A = assistant_ui(reply_language)
+    prompts = A["prompts"]
+
     st.markdown(
-        """
+        f"""
         <div class="ai-page-header">
             <div class="ai-icon">AI</div>
             <div>
-                <h2>AI Health Assistant</h2>
-                <p>Ask general health questions and get clear, cautious information.</p>
+                <h2>{safe_text(A["title"])}</h2>
+                <p>{safe_text(A["subtitle"])}</p>
             </div>
         </div>
         """,
@@ -2262,42 +3664,36 @@ if active_feature == "AI Assistant":
     )
 
     st.markdown(
-        """
+        f"""
         <div class="ai-disclaimer">
-            General health information only — not a diagnosis or a substitute
-            for professional medical advice.
+            {safe_text(A["disclaimer"])}
         </div>
         """,
         unsafe_allow_html=True
     )
 
     if not GROQ_LIB_AVAILABLE:
-        st.warning("The `groq` package isn't installed. Run `pip install groq`.")
+        st.warning(A["no_lib"])
     elif GROQ_API_KEY is None:
-        st.warning(
-            "No Groq API key found. Set `GROQ_API_KEY` in your environment "
-            "or `.streamlit/secrets.toml`."
-        )
+        st.warning(A["no_key"])
     else:
 
         if not st.session_state.chat_messages:
 
+            chips_html = "".join(
+                f"<span>{safe_text(chip)}</span>" for chip in A["chips"]
+            )
             st.markdown(
-                """
+                f"""
                 <div class="ai-welcome-card">
                     <div class="ai-welcome-icon">AI</div>
-                    <h3>Hello, I'm your MediScan AI assistant.</h3>
-                    <p>
-                        Ask me about medicines, symptoms, health habits,
-                        or general healthcare information.
-                    </p>
+                    <h3>{safe_text(A["welcome"])}</h3>
+                    <p>{safe_text(A["welcome_body"])}</p>
                     <div class="ai-suggestions">
-                        <span>Medicine information</span>
-                        <span>Symptom information</span>
-                        <span>Healthy habits</span>
+                        {chips_html}
                     </div>
                     <div class="ai-ready-animation">
-                        <span>Ready to help</span>
+                        <span>{safe_text(A["ready"])}</span>
                         <span class="ms-status-dots"><i></i><i></i><i></i></span>
                     </div>
                 </div>
@@ -2305,26 +3701,100 @@ if active_feature == "AI Assistant":
                 unsafe_allow_html=True
             )
 
-        control_cols = st.columns(5)
+            # One-tap questions, written in the selected language so a user
+            # who cannot read English still has somewhere to start.
+            for position, suggestion in enumerate(A["suggestions"]):
+                if st.button(
+                    suggestion,
+                    key=f"ai_suggestion_{reply_language}_{position}",
+                    use_container_width=True,
+                ):
+                    st.session_state.ai_suggested_question = suggestion
+                    st.rerun()
+
+        control_cols = st.columns(6)
         with control_cols[0]:
-            if st.button("Clear chat", use_container_width=True):
+            if st.button(A["clear_chat"], use_container_width=True):
+                clear_stored_chat()
                 st.session_state.chat_messages = []
                 st.rerun()
         with control_cols[1]:
-            if st.button("Explain simply", use_container_width=True):
-                st.session_state.ai_prefill = "Explain your last answer in very simple words."
+            if st.button(A["explain_simple"], use_container_width=True):
+                st.session_state.ai_prefill = prompts["explain_simple"]
         with control_cols[2]:
-            if st.button("Summarize", use_container_width=True):
-                st.session_state.ai_prefill = "Summarize your last answer in 3 short bullet points."
+            if st.button(A["summarize"], use_container_width=True):
+                st.session_state.ai_prefill = prompts["summarize"]
         with control_cols[3]:
-            if st.button("Regenerate", use_container_width=True) and st.session_state.chat_messages:
+            if st.button(A["regenerate"], use_container_width=True) and st.session_state.chat_messages:
                 if st.session_state.chat_messages[-1]["role"] == "assistant":
+                    # Drop the stale answer from both memory and the database,
+                    # so the reply that replaces it is not appended twice.
+                    delete_last_chat_message()
                     st.session_state.chat_messages.pop()
                 st.session_state.ai_regenerate = True
                 st.rerun()
         with control_cols[4]:
-            st.caption("Voice input")
-            st.audio_input("Record", key="ai_voice_input")
+            # Switching language mid-chat only affects new answers; this turns
+            # the last answer into the newly chosen language.
+            last_answer = ""
+            for message in reversed(st.session_state.chat_messages):
+                if message["role"] == "assistant":
+                    last_answer = message["content"]
+                    break
+            if st.button(
+                A["translate"],
+                use_container_width=True,
+                disabled=not last_answer,
+                key="ai_translate_btn",
+            ):
+                translate_loading = st.empty()
+                translate_loading.markdown(
+                    f"""
+                    <div class="ms-inline-loader ms-ai-loader">
+                        <div class="ms-loading-content">
+                            <div class="ms-spinner"></div>
+                            <p>{safe_text(A["thinking"])}</p>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                translated = ""
+                try:
+                    client = Groq(api_key=GROQ_API_KEY)
+                    response = client.chat.completions.create(
+                        model=GROQ_MODEL,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": build_translation_prompt(
+                                    last_answer, reply_language
+                                ),
+                            }
+                        ],
+                        max_tokens=400,
+                        temperature=0.2,
+                    )
+                    translated = (response.choices[0].message.content or "").strip()
+                except Exception as exc:
+                    translated = ""
+                    translate_loading.empty()
+                    st.error(f"Translation failed: {exc}")
+                translate_loading.empty()
+                if translated:
+                    if st.session_state.chat_messages[-1]["role"] == "assistant":
+                        # Rewriting the last answer, so update its stored row.
+                        update_last_chat_message(translated)
+                        st.session_state.chat_messages[-1]["content"] = translated
+                    else:
+                        st.session_state.chat_messages.append(
+                            {"role": "assistant", "content": translated}
+                        )
+                        save_chat_message("assistant", translated)
+                    st.rerun()
+        with control_cols[5]:
+            st.caption(A["voice_input"])
+            st.audio_input(A["record"], key="ai_voice_input")
 
         chat_box = st.container()
 
@@ -2337,8 +3807,8 @@ if active_feature == "AI Assistant":
                     st.markdown(
                         f"""
                         <div class="ai-message ai-user-message">
-                            <div class="ai-message-label">You</div>
-                            <div>{msg["content"]}</div>
+                            <div class="ai-message-label">{safe_text(A["you"])}</div>
+                            <div>{safe_text(msg["content"])}</div>
                         </div>
                         """,
                         unsafe_allow_html=True
@@ -2349,8 +3819,8 @@ if active_feature == "AI Assistant":
                     st.markdown(
                         f"""
                         <div class="ai-message ai-assistant-message">
-                            <div class="ai-message-label">MediScan AI</div>
-                            <div>{msg["content"]}</div>
+                            <div class="ai-message-label">{safe_text(A["assistant"])}</div>
+                            <div>{safe_text(msg["content"])}</div>
                         </div>
                         """,
                         unsafe_allow_html=True
@@ -2359,9 +3829,11 @@ if active_feature == "AI Assistant":
         prefill = st.session_state.pop("ai_prefill", "")
         if prefill:
             st.info(prefill)
-        user_question = st.chat_input("Type your health question here...")
+        user_question = st.chat_input(A["chat_placeholder"], key="ai_chat_input")
+        if st.session_state.pop("ai_suggested_question", ""):
+            user_question = st.session_state.pop("ai_suggested_question", "")
         if st.session_state.pop("ai_regenerate", False):
-            user_question = "Please regenerate your previous answer with clearer wording."
+            user_question = prompts["regenerate"]
 
         if user_question:
 
@@ -2371,6 +3843,7 @@ if active_feature == "AI Assistant":
                     "content": user_question
                 }
             )
+            save_chat_message("user", user_question)
 
             try:
 
@@ -2380,29 +3853,31 @@ if active_feature == "AI Assistant":
 
                 ai_loading = st.empty()
                 ai_loading.markdown(
-                    """
+                    f"""
                     <div class="ms-inline-loader ms-ai-loader">
                         <div class="ms-loading-content">
                             <div class="ms-spinner"></div>
-                            <p>MediScan AI is thinking...</p>
+                            <p>{safe_text(A["thinking"])}</p>
                         </div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
+                # The system prompt is rebuilt for the selected language, so
+                # this is the switch case that decides the reply language.
                 response = client.chat.completions.create(
                         model=GROQ_MODEL,
                         messages=(
                             [
                                 {
                                     "role": "system",
-                                    "content": ASSISTANT_SYSTEM_PROMPT
+                                    "content": build_assistant_prompt(reply_language)
                                 }
                             ]
                             + st.session_state.chat_messages
                         ),
-                        max_tokens=300,
+                        max_tokens=400,
                         temperature=0.4
                     )
 
@@ -2419,6 +3894,7 @@ if active_feature == "AI Assistant":
                     "content": reply
                 }
             )
+            save_chat_message("assistant", reply)
 
             st.rerun()
 
@@ -2445,7 +3921,11 @@ elif active_feature == "Reminders":
 
     with st.form("add_reminder_form"):
 
-        r_name = st.text_input("Medicine name", value=st.session_state.pop("prefill_reminder", ""))
+        r_name = st.text_input(
+            "Medicine name",
+            value=st.session_state.pop("prefill_reminder", ""),
+            key="reminder_name",
+        )
 
         r_form = st.selectbox(
             "Form",
@@ -2456,7 +3936,8 @@ elif active_feature == "Reminders":
                 "Liquid",
                 "Injection",
                 "Other"
-            ]
+            ],
+            key="reminder_form",
         )
 
         r_food = st.selectbox(
@@ -2465,17 +3946,20 @@ elif active_feature == "Reminders":
                 "Before Food",
                 "After Food",
                 "Either / Not applicable"
-            ]
+            ],
+            key="reminder_food",
         )
 
         r_time = st.time_input(
             "Time to take it",
-            value=datetime.time(9, 0)
+            value=datetime.time(9, 0),
+            key="reminder_time",
         )
 
         r_notes = st.text_input(
             "Notes (optional)",
-            placeholder="e.g. twice daily, with water"
+            placeholder="e.g. twice daily, with water",
+            key="reminder_notes",
         )
 
         add_clicked = st.form_submit_button(
@@ -2484,13 +3968,18 @@ elif active_feature == "Reminders":
 
         if add_clicked and r_name.strip():
 
+            reminder_id = save_reminder(
+                r_name, r_form, r_food, r_time.strftime("%H:%M:%S"), r_notes
+            )
+
             st.session_state.reminders.append(
                 {
                     "name": r_name,
                     "form": r_form,
                     "food": r_food,
                     "time": r_time,
-                    "notes": r_notes
+                    "notes": r_notes,
+                    "id": reminder_id,
                 }
             )
 
@@ -2531,19 +4020,19 @@ elif active_feature == "Reminders":
             st.markdown(
                 f"""
                 <div class="{css_class}">
-                    <b>{reminder['name']}</b>
-                    ({reminder['form']}) —
+                    <b>{safe_text(reminder['name'])}</b>
+                    ({safe_text(reminder['form'])}) —
                     {reminder['time'].strftime('%I:%M %p')}<br>
-                    {reminder['food']}
-                    {f"<br><i>{reminder['notes']}</i>" if reminder['notes'] else ""}
-                    {f"<br><b>{due_text}</b>" if due_text else ""}
+                    {safe_text(reminder['food'])}
+                    {f"<br><i>{safe_text(reminder['notes'])}</i>" if reminder['notes'] else ""}
+                    {f"<br><b>{safe_text(due_text)}</b>" if due_text else ""}
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
         if st.button("Clear All Reminders"):
-
+            delete_all_reminders()
             st.session_state.reminders = []
             st.rerun()
 
@@ -2561,27 +4050,52 @@ if active_feature == "Documents":
 
     uploaded_files = st.file_uploader(
         T["upload_docs"],
-        type=["pdf", "png", "jpg", "jpeg"],
-        accept_multiple_files=True
+        type=["pdf", "png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key="medical_document_uploader",
     )
 
     if uploaded_files:
         for f in uploaded_files:
             if f.name not in [d["name"] for d in st.session_state.documents]:
+                file_data = f.getvalue()
+                if len(file_data) > MAX_DOCUMENT_BYTES:
+                    st.error(
+                        f"{f.name} is too large; the maximum is 10 MiB."
+                    )
+                    continue
+                file_type = getattr(f, "type", None) or "file"
+                document_id = save_document(f.name, file_type, len(file_data))
                 st.session_state.documents.append({
+                    "id": document_id,
                     "name": f.name,
-                    "size_kb": round(len(f.getvalue()) / 1024, 1),
+                    "file_type": file_type,
+                    "size_kb": round(len(file_data) / 1024, 1),
                     "uploaded_on": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
 
     st.caption(
-        "Note: this prototype only stores your documents for this browser "
-        "session — it does not read or extract data from them (no OCR)."
+        "Only the file's name, type and size are stored. The contents "
+        "themselves are neither saved nor read by this app."
     )
 
     if st.session_state.documents:
         st.subheader("📄 Uploaded Documents")
-        st.dataframe(pd.DataFrame(st.session_state.documents), width="stretch", hide_index=True)
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Name": document["name"],
+                        "Type": document.get("file_type") or "file",
+                        "Size (KB)": document.get("size_kb", 0),
+                        "Uploaded": document.get("uploaded_on", ""),
+                    }
+                    for document in st.session_state.documents
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
     else:
         st.info("No documents uploaded yet.")
 
