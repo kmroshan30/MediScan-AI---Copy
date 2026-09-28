@@ -1997,6 +1997,12 @@ if "chat_messages" not in st.session_state:
 if "ai_last_error" not in st.session_state:
     st.session_state.ai_last_error = ""        # last Groq failure, for display
 
+if "chat_save_error" not in st.session_state:
+    st.session_state.chat_save_error = ""      # last chat storage failure
+
+if "chat_pending" not in st.session_state:
+    st.session_state.chat_pending = []         # messages the database rejected
+
 # Reply language for the AI assistant.  It follows the sidebar language on the
 # first visit and can then be switched on its own from the assistant screen.
 if "assistant_language" not in st.session_state:
@@ -2121,6 +2127,12 @@ def load_local_user_data():
         for chat in chats
         if chat["role"]
     ]
+    # Re-apply anything the database refused to store, so a message the user
+    # has already seen is never dropped by the reload above.
+    if st.session_state.chat_pending:
+        st.session_state.chat_messages = (
+            st.session_state.chat_messages + st.session_state.chat_pending
+        )
 
     # Load reminders
     reminders = query(
@@ -2174,11 +2186,32 @@ def _write(sql, params, label):
 
 
 def save_chat_message(role, content):
-    return _write(
+    row_id = _write(
         "INSERT INTO chat_history (user_id, role, message) VALUES (?, ?, ?)",
         (st.session_state.user_id, role, content),
         "chat message",
     )
+    if row_id is None:
+        # The chat path ends in st.rerun(), which rebuilds the conversation from
+        # the database. A row that failed to store would therefore vanish from
+        # screen with no trace, so hold anything unsaved in session_state and
+        # show the reason.
+        st.session_state.chat_save_error = (
+            f"Could not save the {role} message to the database."
+        )
+        st.session_state.chat_pending = st.session_state.chat_pending + [
+            {"role": role, "content": content}
+        ]
+    else:
+        st.session_state.chat_save_error = ""
+        # Now that it is stored, drop the in-memory copy so a later reload does
+        # not show the same message twice.
+        st.session_state.chat_pending = [
+            msg
+            for msg in st.session_state.chat_pending
+            if not (msg["role"] == role and msg["content"] == content)
+        ]
+    return row_id
 
 
 def update_last_chat_message(content):
@@ -3856,6 +3889,8 @@ if active_feature == "AI Assistant":
                 "The assistant could not reach the AI service "
                 f"({st.session_state['ai_last_error']}). Please try again."
             )
+        if st.session_state.get("chat_save_error"):
+            st.warning(st.session_state["chat_save_error"])
 
         chat_box = st.container()
 
