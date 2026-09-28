@@ -272,6 +272,21 @@ if GROQ_API_KEY is None:
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
+# gpt-oss is a *reasoning* model: it spends part of max_tokens on a hidden
+# "reasoning" field before it writes the visible answer. With the default
+# effort it regularly used 200-400 of our 400 tokens on reasoning alone and
+# returned finish_reason="length" with content == "" — an empty reply that the
+# chat then dropped silently. Pinning effort to "low" keeps reasoning to ~5
+# tokens and the answer always lands inside the budget.
+GROQ_REASONING_EFFORT = "low"
+
+# Shown when the model still returns nothing usable, so the user is never
+# left staring at a question with no response and no explanation.
+EMPTY_REPLY_MESSAGE = (
+    "I could not produce an answer for that. Please try rephrasing your "
+    "question."
+)
+
 # ============================================================
 # AI Assistant — reply languages
 # ------------------------------------------------------------
@@ -1922,8 +1937,11 @@ def render_medicine_ai_summary(result, query):
                 ],
                 max_tokens=320,
                 temperature=0.3,
+                reasoning_effort=GROQ_REASONING_EFFORT,
             )
             summary = (response.choices[0].message.content or "").strip()
+            if not summary:
+                summary = EMPTY_REPLY_MESSAGE
         except Exception as exc:
             summary_loading.empty()
             st.error(f"Could not generate the explanation: {exc}")
@@ -2061,10 +2079,14 @@ def load_local_user_data():
         "chat history",
         [],
     )
+    # This reloads on every rerun, so it is also what decides whether a reply
+    # the user just received stays on screen. `if chat["message"]` used to drop
+    # empty rows, which silently erased a blank model reply instead of showing
+    # it — keep the row whenever there is a role, and let the render handle it.
     st.session_state.chat_messages = [
-        {"role": chat["role"], "content": chat["message"]}
+        {"role": chat["role"], "content": chat["message"] or ""}
         for chat in chats
-        if chat["message"]
+        if chat["role"]
     ]
 
     # Load reminders
@@ -3774,6 +3796,7 @@ if active_feature == "AI Assistant":
                         ],
                         max_tokens=400,
                         temperature=0.2,
+                        reasoning_effort=GROQ_REASONING_EFFORT,
                     )
                     translated = (response.choices[0].message.content or "").strip()
                 except Exception as exc:
@@ -3877,12 +3900,18 @@ if active_feature == "AI Assistant":
                             ]
                             + st.session_state.chat_messages
                         ),
-                        max_tokens=400,
-                        temperature=0.4
+                        max_tokens=600,
+                        temperature=0.4,
+                        reasoning_effort=GROQ_REASONING_EFFORT,
                     )
 
                 ai_loading.empty()
-                reply = response.choices[0].message.content
+                # A reasoning model that runs out of budget answers with an
+                # empty string, which would render as a blank bubble and be
+                # dropped on the next reload. Fall back to a real message.
+                reply = (response.choices[0].message.content or "").strip()
+                if not reply:
+                    reply = EMPTY_REPLY_MESSAGE
 
             except Exception as e:
 
