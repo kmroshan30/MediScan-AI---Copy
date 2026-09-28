@@ -310,11 +310,17 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
             )
             reply = (response.choices[0].message.content or "").strip()
             if reply:
+                # Cleared on success so a later screen does not show a stale
+                # error from an earlier question.
+                st.session_state.ai_last_error = ""
                 return reply
             last_error = RuntimeError("model returned an empty reply")
         except Exception as exc:  # network hiccup, rate limit, bad key, ...
             last_error = exc
-    st.warning(f"Groq request failed: {last_error}")
+    # The chat ends in st.rerun(), which discards anything written straight to
+    # the page. Stashing the reason in session_state is what makes a failure
+    # visible on the next run instead of silently becoming a blank bubble.
+    st.session_state.ai_last_error = str(last_error)
     return EMPTY_REPLY_MESSAGE
 
 # ============================================================
@@ -1987,6 +1993,9 @@ if "documents" not in st.session_state:
 
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []        # AI assistant conversation
+
+if "ai_last_error" not in st.session_state:
+    st.session_state.ai_last_error = ""        # last Groq failure, for display
 
 # Reply language for the AI assistant.  It follows the sidebar language on the
 # first visit and can then be switched on its own from the assistant screen.
@@ -3838,6 +3847,15 @@ if active_feature == "AI Assistant":
         with control_cols[5]:
             st.caption(A["voice_input"])
             st.audio_input(A["record"], key="ai_voice_input")
+
+        # A failed request is stashed in session_state by ask_groq, because the
+        # chat path ends in st.rerun() and would otherwise wipe any warning
+        # before the user could read it.
+        if st.session_state.get("ai_last_error"):
+            st.warning(
+                "The assistant could not reach the AI service "
+                f"({st.session_state['ai_last_error']}). Please try again."
+            )
 
         chat_box = st.container()
 
