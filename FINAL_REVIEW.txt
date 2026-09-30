@@ -43,7 +43,7 @@ Python libraries (the exact installed versions):
   Streamlit        1.64.0   - the web framework (builds the whole UI)
   pandas           3.0.6    - reading and cleaning the data files
   numpy            2.5.3    - numbers and arrays used by the model
-  scikit-learn     1.9.1    - the machine learning model
+  scikit-learn     1.9.0    - the machine learning model
   joblib           1.6.0    - saving/loading the trained model file
   plotly           7.0.0    - interactive charts
   pytesseract      0.3.13   - Python bridge to the Tesseract OCR engine
