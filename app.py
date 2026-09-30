@@ -4338,9 +4338,9 @@ if active_feature == "AI Assistant":
         if st.session_state.pop("ai_regenerate", False):
             user_question = prompts["regenerate"]
 
-            if user_question:
+        if user_question:
 
-                st.session_state.chat_messages.append(
+            st.session_state.chat_messages.append(
                 {
                     "role": "user",
                     "content": user_question
@@ -4426,8 +4426,7 @@ if active_feature == "AI Assistant":
 
             st.session_state.ai_last_stage = "assistant_saved"
 
-            # TEMPORARILY DISABLED FOR DEBUGGING
-            # st.rerun()
+            st.rerun()
 
 elif active_feature == "Reminders":
 
