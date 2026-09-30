@@ -1,10 +1,17 @@
-streamlit>=1.37
-pandas
-numpy
-scikit-learn
-joblib
-plotly
-pytesseract
-Pillow
-groq
-requests>=2.31
+# Pinned to the versions this app is built and tested against.
+#
+# These must not be left floating. models/triage_model.pkl was pickled with
+# scikit-learn 1.9.0, and joblib refuses to load a pipeline across an
+# incompatible version. app.py turns that load failure into st.stop(), which
+# takes down every page including the AI Assistant — so an unpinned
+# scikit-learn can break the whole app on a fresh deploy.
+streamlit==1.64.0
+scikit-learn==1.9.1
+pandas==3.0.6
+numpy==2.5.3
+joblib==1.6.0
+plotly==7.0.0
+pytesseract==0.3.13
+Pillow==12.3.0
+groq==1.7.0
+requests==2.34.2

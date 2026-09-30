@@ -263,17 +263,55 @@ if OCR_AVAILABLE:
 #   GROQ_API_KEY = "your_key_here"
 # ============================================================
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY") or None
-if GROQ_API_KEY is None:
+GROQ_KEY_SOURCE = None
+GROQ_KEY_PROBLEM = None
+
+
+def _read_groq_key():
+    """Find the Groq key, and say where it came from when there isn't one.
+
+    Order matters: an environment variable wins, so a deploy can override a
+    stale secrets file. The key is looked up both at the top level and under a
+    `[default]` table, because both are valid shapes for a secrets.toml and
+    picking the wrong one is an easy mistake that looks exactly like a missing
+    key. When nothing is found the reason is recorded instead of being
+    swallowed, so the assistant screen can explain itself instead of only
+    saying "no key".
+    """
+    env_key = (os.environ.get("GROQ_API_KEY") or "").strip()
+    if env_key:
+        return env_key, "environment variable GROQ_API_KEY", None
+
     try:
-        GROQ_API_KEY = st.secrets["GROQ_API_KEY"] or None
-    except Exception:
-        GROQ_API_KEY = None
+        secrets_obj = st.secrets
+    except Exception as exc:
+        return None, None, f"st.secrets is unavailable ({exc})"
+
+    for label, getter in (
+        ("secrets.toml GROQ_API_KEY", lambda: secrets_obj["GROQ_API_KEY"]),
+        ("secrets.toml [default] GROQ_API_KEY", lambda: secrets_obj["default"]["GROQ_API_KEY"]),
+    ):
+        try:
+            value = (getter() or "").strip()
+        except (KeyError, AttributeError):
+            continue
+        except Exception as exc:
+            return None, None, f"could not read {label} ({exc})"
+        if value:
+            return value, label, None
+
+    return None, None, (
+        "GROQ_API_KEY is not set in the environment or in "
+        ".streamlit/secrets.toml"
+    )
+
+
+GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 
 # Shown on the assistant screen. A deployed app otherwise gives no way to tell
 # which build is actually running, which is the difference between "the code is
 # wrong" and "the old build is still being served". Bump this on every deploy.
-APP_BUILD = "2026-09-29-groq-reply"
+APP_BUILD = "2026-09-30-assistant-diagnosis"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
@@ -285,11 +323,92 @@ GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 # tokens and the answer always lands inside the budget.
 GROQ_REASONING_EFFORT = "low"
 
+# `reasoning_effort` is accepted *only* by Groq's open-weight reasoning models.
+# Sent to a normal chat model it is a hard 400, which used to mean the
+# assistant could never answer at all once GROQ_MODEL was pointed at, say,
+# llama-3.3-70b-versatile. The parameter is therefore only attached for models
+# in this list, and is dropped automatically if the API rejects it anyway.
+GROQ_REASONING_MODELS = frozenset({
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+})
+
+# Streamlit Community Cloud has generous but finite CPU; a hung socket must
+# fail into the retry loop instead of freezing the page for minutes.
+GROQ_TIMEOUT_SECONDS = 60
+
 # Shown when the model still returns nothing usable, so the user is never
 # left staring at a question with no response and no explanation.
 EMPTY_REPLY_MESSAGE = (
     "Sorry, I could not generate a reply just now. Please try asking again."
 )
+
+
+def _is_unsupported_param_error(exc):
+    """Whether the API refused a request parameter this app sent."""
+    text = str(exc).lower()
+    if getattr(exc, "status_code", None) not in (400, 422):
+        return False
+    return (
+        "reasoning_effort" in text
+        or "unsupported" in text
+        or "not supported" in text
+        or "unrecognized" in text
+        or "unknown" in text
+    )
+
+
+def _chat_completion(client, messages, max_tokens, temperature):
+    """One chat completion, dropping reasoning_effort if the model rejects it.
+
+    Building the request separately from `ask_groq` keeps the retry loop above
+    readable, and gives unsupported parameters a second chance inside the same
+    attempt instead of burning a whole retry on a 400 that never succeeds.
+    """
+    kwargs = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if GROQ_MODEL in GROQ_REASONING_MODELS:
+        kwargs["reasoning_effort"] = GROQ_REASONING_EFFORT
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        if "reasoning_effort" in kwargs and _is_unsupported_param_error(exc):
+            kwargs.pop("reasoning_effort")
+            return client.chat.completions.create(**kwargs)
+        raise
+
+
+def _is_worth_retrying(exc):
+    """Whether another attempt could plausibly succeed.
+
+    A rejected key or a missing model will fail identically every time, so
+    retrying only delays the error the user needs to see. Rate limits and
+    empty replies are worth another go, and so is a network failure.
+    """
+    text = str(exc).lower()
+    permanent_markers = (
+        "invalid api key",
+        "incorrect api key",
+        "invalid_request_error",
+        "permission denied",
+        "unauthorized",
+        "authentication",
+        "model_deprecated",
+        "no such model",
+        "does not exist",
+    )
+    if any(marker in text for marker in permanent_markers):
+        return False
+    # A bad key surfaces from the SDK as a 401 whose body mentions the key
+    # being wrong; treat any 401/403 as permanent too.
+    status = getattr(exc, "status_code", None)
+    if status in (401, 403):
+        return False
+    return True
 
 
 def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
@@ -303,16 +422,22 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
     caller always gets displayable text.
     """
     last_error = None
-    st.session_state.ai_last_stage = f"calling_api(attempt 1 of {attempts})"
+    if not GROQ_API_KEY:
+        # Guarded rather than left to the SDK: Groq(api_key=None) raises, and
+        # that message ("No api_key") does not say where the key should go.
+        st.session_state.ai_last_error = describe_groq_key_missing()
+        st.session_state.ai_last_stage = "no_api_key"
+        return EMPTY_REPLY_MESSAGE
+
     for attempt in range(attempts):
+        st.session_state.ai_last_stage = f"calling_api(attempt {attempt + 1} of {attempts})"
         try:
-            client = Groq(api_key=GROQ_API_KEY)
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=messages,
-                max_tokens=max_tokens * (attempt + 1),
-                temperature=temperature,
-                reasoning_effort=GROQ_REASONING_EFFORT,
+            client = Groq(api_key=GROQ_API_KEY, timeout=GROQ_TIMEOUT_SECONDS)
+            response = _chat_completion(
+                client,
+                messages,
+                max_tokens * (attempt + 1),
+                temperature,
             )
             reply = (response.choices[0].message.content or "").strip()
             st.session_state.ai_last_reply_len = len(reply)
@@ -325,12 +450,146 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
             last_error = RuntimeError("model returned an empty reply")
         except Exception as exc:  # network hiccup, rate limit, bad key, ...
             last_error = exc
+            if not _is_worth_retrying(exc):
+                # Repeating the same call cannot fix a rejected key, and a
+                # short pause between the other retries stops a rate limit from
+                # being hammered three times in a row.
+                break
+        if attempt < attempts - 1:
+            time.sleep(1.0 + attempt)
     # The chat ends in st.rerun(), which discards anything written straight to
     # the page. Stashing the reason in session_state is what makes a failure
     # visible on the next run instead of silently becoming a blank bubble.
-    st.session_state.ai_last_error = str(last_error)
+    st.session_state.ai_last_error = describe_groq_error(last_error)
     st.session_state.ai_last_stage = f"all_attempts_failed({last_error})"
     return EMPTY_REPLY_MESSAGE
+
+
+def describe_groq_error(exc):
+    """Turn a Groq failure into something the user can act on.
+
+    The raw SDK message ("Error code: 401 - {'error': ...}") is the one piece
+    of information that distinguishes a rejected key from a rate limit or a
+    network problem, so it is kept and explained rather than replaced with a
+    generic apology.
+    """
+    if exc is None:
+        return "no reply was returned"
+    raw = str(exc).strip()
+    lowered = raw.lower()
+    if "api key" in lowered or getattr(exc, "status_code", None) in (401, 403):
+        return (
+            f"Groq rejected the API key {mask_groq_key(GROQ_API_KEY)} ({raw}). "
+            f"It came from {GROQ_KEY_SOURCE or 'an unknown place'}, so it is "
+            f"invalid, revoked, or has no access to {GROQ_MODEL}. Create a new "
+            "key at console.groq.com/keys and update the secret, then restart "
+            "the app."
+        )
+    if "rate limit" in lowered or getattr(exc, "status_code", None) == 429:
+        return (
+            f"Groq rate limit reached ({raw}). Wait a moment and try again."
+        )
+    if "model" in lowered and ("not found" in lowered or "deprecat" in lowered):
+        return (
+            f"Groq does not recognise the model {GROQ_MODEL} ({raw}). Pick a "
+            "model from the Groq model list and set GROQ_MODEL."
+        )
+    return raw or exc.__class__.__name__
+
+
+def mask_groq_key(key):
+    """Show enough of a key to recognise which one is in use, and no more.
+
+    The full value must never reach the page, a log line or a screenshot, so
+    only the first and last few characters survive.
+    """
+    if not key:
+        return "(no key)"
+    text = str(key)
+    if len(text) <= 12:
+        return "***"
+    return f"{text[:7]}...{text[-4:]}"
+
+
+def describe_groq_key_missing():
+    """Explain exactly where the key belongs for the app that is running.
+
+    This is the single most important message in the whole feature. A local
+    run and a Streamlit Community Cloud run take their secrets from two
+    completely different places, and editing only one of them is precisely how
+    "it works on localhost but the deployed assistant never answers" happens:
+    `.streamlit/` is gitignored, so a local secrets.toml is never deployed and
+    the hosted app ends up with no key at all.
+
+    Streamlit exposes no reliable "am I running on Community Cloud" flag, and a
+    wrong guess here would send the user to the wrong place, so both routes are
+    always listed rather than guessing one.
+    """
+    return (
+        "GROQ_API_KEY was not found by the running app, so the assistant has "
+        "no model to answer with. Where the key goes depends on how this app "
+        "is being served:\n\n"
+        "- Deployed on Streamlit Community Cloud (mediscan-ai-cdu.streamlit.app): "
+        "open share.streamlit.io -> your app -> Settings -> Secrets, add the "
+        'line GROQ_API_KEY = "gsk_...", press Save, then press Rerun. Editing '
+        ".streamlit/secrets.toml on your own machine has no effect here, "
+        "because that folder is gitignored and never deployed.\n"
+        "- Running locally (localhost:8501): add GROQ_API_KEY = \"gsk_...\" to "
+        ".streamlit/secrets.toml, or set it as an environment variable, then "
+        "restart the app.\n\n"
+        f"Checked so far: {GROQ_KEY_PROBLEM or 'no key in the environment or in secrets.toml'}."
+    )
+
+
+def groq_status():
+    """Check the configured key and model against the live Groq API.
+
+    Returns (ok, message). Without this, "no key", "revoked key", "retired
+    model" and "Groq is unreachable" all look identical from outside the app:
+    the assistant simply never answers. One authenticated GET /models is
+    cheap enough to run on the assistant screen and separates all four, so the
+    deployed app can tell the user what is actually wrong instead of leaving
+    them to guess.
+    """
+    if not GROQ_LIB_AVAILABLE:
+        return False, (
+            "The `groq` package is not installed, so the assistant cannot "
+            "call the API at all. Run `pip install -r requirements.txt`."
+        )
+    if not GROQ_API_KEY:
+        return False, describe_groq_key_missing()
+
+    masked = mask_groq_key(GROQ_API_KEY)
+    try:
+        client = Groq(api_key=GROQ_API_KEY, timeout=GROQ_TIMEOUT_SECONDS)
+        model_ids = [getattr(m, "id", "") for m in client.models.list().data]
+    except Exception as exc:
+        status = getattr(exc, "status_code", None)
+        raw = str(exc).strip()
+        if status in (401, 403) or "api key" in raw.lower():
+            return False, (
+                f"Groq rejected the key {masked} ({raw}). It came from "
+                f"{GROQ_KEY_SOURCE or 'an unknown place'}. It is invalid, "
+                "revoked, or was never given access. Make a new one at "
+                "console.groq.com/keys, update the secret, and restart."
+            )
+        return False, (
+            f"Could not reach Groq to verify the key {masked} ({raw}). This "
+            "is a network problem rather than a key problem — the assistant "
+            "will keep retrying when a question is asked."
+        )
+
+    if GROQ_MODEL not in model_ids:
+        return False, (
+            f"The key {masked} is accepted by Groq, but this account cannot "
+            f"use the configured model {GROQ_MODEL!r}. Models available to "
+            f"this key: {', '.join(sorted(i for i in model_ids if i))}. Set "
+            "GROQ_MODEL in app.py to one of those and redeploy."
+        )
+    return True, (
+        f"Groq connection OK — key {masked} accepted, model {GROQ_MODEL} "
+        f"available ({len(model_ids)} models on this key)."
+    )
 
 # ============================================================
 # AI Assistant — reply languages
@@ -2015,6 +2274,17 @@ if "ai_last_reply_len" not in st.session_state:
 if "ai_last_stage" not in st.session_state:
     st.session_state.ai_last_stage = "idle"   # how far the last request got
 
+# Result of the live Groq reachability check shown on the assistant screen.
+# Kept so the check costs one request per session instead of one per rerun.
+if "groq_check" not in st.session_state:
+    st.session_state.groq_check = None        # (ok, message) from groq_status()
+
+if "groq_check_failed" not in st.session_state:
+    st.session_state.groq_check_failed = False
+
+if "groq_check_forced" not in st.session_state:
+    st.session_state.groq_check_forced = False
+
 if "chat_pending" not in st.session_state:
     st.session_state.chat_pending = []         # messages the database rejected
 
@@ -2563,11 +2833,19 @@ with st.sidebar:
 # Load trained triage model
 # ============================================================
 
+# Only the Triage page uses this model, so a load failure must not end the
+# script: st.stop() here would blank every page, including the AI Assistant,
+# and the real cause (a scikit-learn version that cannot unpickle the saved
+# pipeline) is easy to miss. Report it and carry on with model = None.
 try:
     model = joblib.load(MODEL_PATH)
 except Exception as e:
-    st.error(f"Unable to load the triage model: {e}")
-    st.stop()
+    model = None
+    st.error(
+        f"Unable to load the triage model: {e}. The Triage page is unavailable; "
+        "every other page still works. Retrain it with "
+        "`python modules/train_model.py` if the saved model is out of date."
+    )
 
 # ============================================================
 # Header
@@ -3191,6 +3469,18 @@ if active_feature == "Triage":
                             confidence = 100.0
                             probabilities = None
                             classes = None
+                        elif model is None:
+                            # The saved model failed to load. The emergency
+                            # keyword check above is independent of it, so
+                            # report that path still works rather than
+                            # crashing on a None predict().
+                            st.warning(
+                                "The triage model could not be loaded, so only "
+                                "the emergency keyword check was applied. Please "
+                                "consult a doctor rather than relying on this "
+                                "result."
+                            )
+                            raise RuntimeError("triage model unavailable")
                         else:
                             prediction = model.predict(input_data)[0]
 
@@ -3779,6 +4069,17 @@ if active_feature == "AI Assistant":
         st.warning(A["no_lib"])
     elif GROQ_API_KEY is None:
         st.warning(A["no_key"])
+        # A bare "no key found" cannot be acted on. Say which places were
+        # checked and why the lookup came back empty, so a mistyped secret or a
+        # wrong section heading is visible instead of looking like a bug.
+        st.info(GROQ_KEY_PROBLEM or "No Groq API key is configured.")
+        # The single most common cause of "it works locally but the deployed
+        # assistant never answers": .streamlit/ is gitignored, so the local
+        # secrets.toml is never deployed and the hosted app has no key at all.
+        # Without the chat box being rendered there is nothing on this page to
+        # reply to, which reads as a broken assistant rather than a missing
+        # configuration value.
+        st.error(describe_groq_key_missing())
     else:
 
         if not st.session_state.chat_messages:
@@ -3824,9 +4125,11 @@ if active_feature == "AI Assistant":
         with control_cols[1]:
             if st.button(A["explain_simple"], use_container_width=True):
                 st.session_state.ai_prefill = prompts["explain_simple"]
+                st.rerun()
         with control_cols[2]:
             if st.button(A["summarize"], use_container_width=True):
                 st.session_state.ai_prefill = prompts["summarize"]
+                st.rerun()
         with control_cols[3]:
             if st.button(A["regenerate"], use_container_width=True) and st.session_state.chat_messages:
                 if st.session_state.chat_messages[-1]["role"] == "assistant":
@@ -3900,19 +4203,46 @@ if active_feature == "AI Assistant":
         # chat path ends in st.rerun() and would otherwise wipe any warning
         # before the user could read it.
         if st.session_state.ai_last_error:
-            st.warning(
-                "The assistant could not reach the AI service "
-                f"({st.session_state.ai_last_error}). Please try again."
-            )
+            # describe_groq_error() already explains the common causes (bad
+            # key, rate limit, retired model) and keeps the raw SDK message, so
+            # the full reason is shown rather than a generic apology.
+            st.warning(st.session_state.ai_last_error)
         if st.session_state.chat_save_error:
             st.warning(st.session_state.chat_save_error)
 
         st.caption(
             f"Build {APP_BUILD} · model {GROQ_MODEL} · "
-            f"API key {'configured' if GROQ_API_KEY else 'MISSING'} · "
+            f"API key {('from ' + GROQ_KEY_SOURCE) if GROQ_API_KEY else 'MISSING'} · "
             f"stage {st.session_state.ai_last_stage} · "
             f"last reply {st.session_state.ai_last_reply_len} chars"
         )
+
+        # Live reachability check. `ask_groq` only runs when a question is
+        # typed, so a broken deployment otherwise shows a perfectly normal
+        # page and simply never answers. One authenticated GET /models costs
+        # almost nothing and proves the key and model are usable before the
+        # user wonders why. Run once per session, then re-run on demand and
+        # whenever a request actually failed, so a fixed secret is picked up.
+        if st.button("Check Groq connection", key="ai_check_groq"):
+            st.session_state.groq_check_forced = True
+        wants_check = (
+            st.session_state.groq_check_forced
+            or bool(st.session_state.ai_last_error)
+            or st.session_state.get("groq_check") is None
+        )
+        if wants_check:
+            groq_ok, groq_message = groq_status()
+            st.session_state.groq_check = (groq_ok, groq_message)
+            st.session_state.groq_check_failed = not groq_ok
+            st.session_state.groq_check_forced = False
+
+        groq_ok, groq_message = st.session_state.get("groq_check") or (False, "")
+        if groq_ok:
+            st.caption(groq_message)
+        elif groq_message and st.session_state.get("groq_check_failed"):
+            # Only shouted about when it has actually failed, so a working
+            # assistant page stays quiet.
+            st.error(groq_message)
 
         chat_box = st.container()
 
@@ -3944,12 +4274,21 @@ if active_feature == "AI Assistant":
                         unsafe_allow_html=True
                     )
 
+        # "Explain simply" and "Summarize" set ai_prefill and end the run. That
+        # prompt is the question to send, so it is picked up here exactly like
+        # a typed message. It used to be popped into st.info() and dropped,
+        # which left both buttons looking like they did nothing.
         prefill = st.session_state.pop("ai_prefill", "")
         if prefill:
             st.info(prefill)
         user_question = st.chat_input(A["chat_placeholder"], key="ai_chat_input")
-        if st.session_state.pop("ai_suggested_question", ""):
-            user_question = st.session_state.pop("ai_suggested_question", "")
+        if prefill:
+            user_question = prefill
+        # pop() twice removed the value on the first call, so the second one
+        # always returned "" and every one-tap suggestion button was a no-op.
+        suggested = st.session_state.pop("ai_suggested_question", "")
+        if suggested:
+            user_question = suggested
         if st.session_state.pop("ai_regenerate", False):
             user_question = prompts["regenerate"]
 

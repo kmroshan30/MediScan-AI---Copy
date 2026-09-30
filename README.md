@@ -129,6 +129,30 @@ export GROQ_API_KEY="gsk_your_key_here"
 
 > `.streamlit/` and `.env` are already in `.gitignore`, so your key stays local.
 
+#### If you deploy to Streamlit Community Cloud
+
+`.streamlit/` is gitignored, so the file above **never reaches a deployed app** —
+that is what keeps your key out of GitHub, but it also means the hosted app has
+no key at all until you give it one. Adding it to your local `secrets.toml` (or
+a local `.env`) has no effect on `mediscan-ai-cdu.streamlit.app`.
+
+For the hosted app, put the key in the dashboard instead:
+
+1. Open [share.streamlit.io](https://share.streamlit.io) and select your app.
+2. Go to **Settings → Secrets**.
+3. Add exactly this line (the name must match `GROQ_API_KEY`, including case):
+   ```toml
+   GROQ_API_KEY = "gsk_your_key_here"
+   ```
+4. Press **Save**, then press **Rerun** — the app must restart to read the secret.
+
+The assistant page shows which of these sources the running app actually found
+(the key is masked, e.g. `gsk_pdR...LvXm`), plus a **Check Groq connection**
+button that calls Groq's `/models` endpoint and confirms the key is accepted and
+the configured model is available. If the assistant never answers, that button
+distinguishes a missing key from a revoked key, a retired model, and a network
+failure — locally and on the deployed app alike.
+
 ### 6. Run the app
 
 ```bash
@@ -147,7 +171,9 @@ first run — register an account from the login screen to get started.
 | `GROQ_API_KEY` | For the AI Assistant | Authenticates with the Groq API. Read from the environment or `.streamlit/secrets.toml`. |
 | `TESSERACT_PATH` | Windows only | Absolute path to `tesseract.exe`. Not needed on macOS/Linux. |
 
-Without `GROQ_API_KEY` the rest of the app still works; only the assistant is disabled.
+Without `GROQ_API_KEY` the rest of the app still works; only the assistant is disabled. The
+assistant page states exactly where a missing key belongs for the way that copy of the app
+is being served, instead of failing silently.
 
 ---
 
@@ -226,6 +252,15 @@ Conversational Q&A through the Groq API. Requests are constrained by safety rule
 force short, clear answers and direct users to emergency care for anything urgent.
 The assistant answers in English, हिन्दी, or తెలుగు.
 
+The model is `openai/gpt-oss-20b`, a *reasoning* model: it spends part of its token
+budget on a hidden `reasoning` field before writing the visible answer. `reasoning_effort`
+is pinned to `low` so that stays a handful of tokens instead of swallowing the whole
+budget and returning an empty reply. That parameter is only sent to models that accept it,
+so pointing `GROQ_MODEL` at a normal chat model keeps working instead of failing with a 400.
+
+Every reply goes through a retry loop, and a failure is always shown with its reason rather
+than dropped — a blank bubble used to be the only symptom of a rejected key.
+
 ---
 
 ## Data sources
@@ -274,6 +309,18 @@ Tesseract isn't installed, or `TESSERACT_PATH` is wrong. Verify with
 `GROQ_API_KEY` isn't set. Restart the terminal after `setx` — environment variables
 don't apply to already-open shells.
 
+**The AI Assistant works on localhost but never replies on the deployed app**
+This is the expected outcome of `.streamlit/` being gitignored: the local
+`secrets.toml` is deliberately not deployed, so the hosted app has no key. Add
+the key under **Settings → Secrets** in the Streamlit Cloud dashboard and press
+Rerun — see [If you deploy to Streamlit Community Cloud](#5-add-your-groq-api-key).
+
+**The AI Assistant answers on one page but not after a redeploy**
+Streamlit Community Cloud wipes its container filesystem on every restart, and
+the app builds a fresh SQLite database. Accounts and chat history created
+before a restart are gone. This is a single-developer prototype limitation, not
+a bug; see [Deployment notes](#deployment-notes).
+
 **Port 8501 already in use**
 
 ```bash
@@ -283,6 +330,28 @@ streamlit run app.py --server.port 8502
 **"Medicine database not found"**
 `data/medicines.csv` is missing or was moved. It ships with the repo — re-download it if
 you deleted it.
+
+---
+
+## Deployment notes
+
+Deploying to Streamlit Community Cloud (`share.streamlit.io` → your app) needs three
+things this project deliberately does not put in the repository:
+
+| What | Why it isn't in the repo | Where to put it instead |
+|---|---|---|
+| `GROQ_API_KEY` | `.streamlit/` is gitignored, so a committed key would be public | Dashboard → **Settings → Secrets**, then **Rerun** |
+| `TESSERACT_PATH` | Only meaningful on Windows; the cloud image installs its own Tesseract via `packages.txt` | Usually not needed |
+| `MEDISCAN_DB_PATH` | Points at a durable volume on a self-hosted host | Only when you have a real disk |
+
+Two consequences of running on Community Cloud are worth knowing before you file bugs:
+
+- **The filesystem is ephemeral.** Every restart or redeploy throws away the SQLite
+  database, including all accounts, chat history, reminders, and triage records. Users
+  must register again. `MEDISCAN_DB_PATH` exists to redirect storage if you self-host
+  somewhere with a persistent volume.
+- **Secrets only apply after a restart.** Saving a secret in the dashboard does not
+  affect the already-running container; press **Rerun**.
 
 ---
 
