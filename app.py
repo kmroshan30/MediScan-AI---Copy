@@ -313,7 +313,7 @@ GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 # wrong" and "the old build is still being served". Bump this on every deploy.
 APP_BUILD = "2026-09-30-assistant-diagnosis"
 
-GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
+GROQ_MODEL = "llama-3.3-70b-versatile"  # verify against Groq's current model list
 
 # gpt-oss is a *reasoning* model: it spends part of max_tokens on a hidden
 # "reasoning" field before it writes the visible answer. With the default
@@ -328,10 +328,7 @@ GROQ_REASONING_EFFORT = "low"
 # assistant could never answer at all once GROQ_MODEL was pointed at, say,
 # llama-3.3-70b-versatile. The parameter is therefore only attached for models
 # in this list, and is dropped automatically if the API rejects it anyway.
-GROQ_REASONING_MODELS = frozenset({
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
-})
+GROQ_REASONING_MODELS = frozenset()
 
 # Streamlit Community Cloud has generous but finite CPU; a hung socket must
 # fail into the retry loop instead of freezing the page for minutes.
