@@ -1258,6 +1258,7 @@ def clear_local_session_state():
     }
     st.session_state.documents = []
     st.session_state.chat_messages = []
+    st.session_state.chat_history_loaded = False
     st.session_state.reminders = []
     st.session_state.activity_log = []
     st.session_state.saved_medicines = []
@@ -2305,6 +2306,9 @@ if "documents" not in st.session_state:
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []        # AI assistant conversation
 
+if "chat_history_loaded" not in st.session_state:
+    st.session_state.chat_history_loaded = False  # SQLite chat loaded for this session
+
 if "ai_last_error" not in st.session_state:
     st.session_state.ai_last_error = ""        # last Groq failure, for display
 
@@ -2437,30 +2441,39 @@ def load_local_user_data():
         for doc in docs
     ]
 
-    # Load chat history
-    chats = query(
-        # created_at only has one-second resolution, so a question and its reply
-        # saved in the same second would tie; id breaks the tie into send order.
-        "SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY created_at ASC, id ASC",
-        (user_id,),
-        "chat history",
-        [],
-    )
-    # This reloads on every rerun, so it is also what decides whether a reply
-    # the user just received stays on screen. `if chat["message"]` used to drop
-    # empty rows, which silently erased a blank model reply instead of showing
-    # it — keep the row whenever there is a role, and let the render handle it.
-    st.session_state.chat_messages = [
-        {"role": chat["role"], "content": chat["message"] or ""}
-        for chat in chats
-        if chat["role"]
-    ]
-    # Re-apply anything the database refused to store, so a message the user
-    # has already seen is never dropped by the reload above.
-    if st.session_state.chat_pending:
-        st.session_state.chat_messages = (
-            st.session_state.chat_messages + st.session_state.chat_pending
+    # Load chat history only once per Streamlit session.
+    # Rebuilding chat_messages on every rerun can overwrite the active
+    # in-memory conversation while a chat request is being processed.
+    if not st.session_state.get("chat_history_loaded", False):
+        chats = query(
+            # created_at only has one-second resolution, so a question and its
+            # reply saved in the same second would tie; id breaks the tie into
+            # send order.
+            "SELECT role, message FROM chat_history "
+            "WHERE user_id = ? ORDER BY created_at ASC, id ASC",
+            (user_id,),
+            "chat history",
+            [],
         )
+
+        st.session_state.chat_messages = [
+            {"role": chat["role"], "content": chat["message"] or ""}
+            for chat in chats
+            if chat["role"]
+        ]
+        st.session_state.chat_history_loaded = True
+
+    # Re-apply anything the database refused to store, without duplicating
+    # messages that are already present in memory.
+    if st.session_state.chat_pending:
+        existing_pending = {
+            (msg["role"], msg["content"])
+            for msg in st.session_state.chat_messages
+        }
+        for msg in st.session_state.chat_pending:
+            key = (msg["role"], msg["content"])
+            if key not in existing_pending:
+                st.session_state.chat_messages.append(msg)
 
     # Load reminders
     reminders = query(
@@ -4167,6 +4180,8 @@ if active_feature == "AI Assistant":
             if st.button(A["clear_chat"], use_container_width=True):
                 clear_stored_chat()
                 st.session_state.chat_messages = []
+                st.session_state.chat_history_loaded = True
+                st.session_state.chat_pending = []
                 st.rerun()
         with control_cols[1]:
             if st.button(A["explain_simple"], use_container_width=True):
