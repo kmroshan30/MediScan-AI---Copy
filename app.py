@@ -313,7 +313,7 @@ GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 # wrong" and "the old build is still being served". Bump this on every deploy.
 APP_BUILD = "2026-09-30-assistant-diagnosis"
 
-GROQ_MODEL = "llama-3.3-70b-versatile"  # verify against Groq's current model list
+GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
 # gpt-oss is a *reasoning* model: it spends part of max_tokens on a hidden
 # "reasoning" field before it writes the visible answer. With the default
@@ -322,6 +322,11 @@ GROQ_MODEL = "llama-3.3-70b-versatile"  # verify against Groq's current model li
 # chat then dropped silently. Pinning effort to "low" keeps reasoning to ~5
 # tokens and the answer always lands inside the budget.
 GROQ_REASONING_EFFORT = "low"
+
+GROQ_REASONING_MODELS = frozenset({
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+})
 
 # `reasoning_effort` is accepted *only* by Groq's open-weight reasoning models.
 # Sent to a normal chat model it is a hard 400, which used to mean the
@@ -356,26 +361,43 @@ def _is_unsupported_param_error(exc):
 
 
 def _chat_completion(client, messages, max_tokens, temperature):
-    """One chat completion, dropping reasoning_effort if the model rejects it.
+    """One chat completion with GPT-OSS reasoning support.
 
-    Building the request separately from `ask_groq` keeps the retry loop above
-    readable, and gives unsupported parameters a second chance inside the same
-    attempt instead of burning a whole retry on a 400 that never succeeds.
+    Sends reasoning_effort only when the configured model is a reasoning model.
+    If Groq rejects reasoning_effort, retries the same request without it.
     """
+
     kwargs = {
         "model": GROQ_MODEL,
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": temperature,
     }
+
+    # Only send temperature to non-reasoning models.
+    # GPT-OSS uses reasoning_effort instead.
+    if GROQ_MODEL not in GROQ_REASONING_MODELS:
+        kwargs["temperature"] = temperature
+
+    # GPT-OSS reasoning models
     if GROQ_MODEL in GROQ_REASONING_MODELS:
         kwargs["reasoning_effort"] = GROQ_REASONING_EFFORT
+
     try:
         return client.chat.completions.create(**kwargs)
+
     except Exception as exc:
-        if "reasoning_effort" in kwargs and _is_unsupported_param_error(exc):
+        # If Groq rejects reasoning_effort, retry without it.
+        if (
+            "reasoning_effort" in kwargs
+            and _is_unsupported_param_error(exc)
+        ):
             kwargs.pop("reasoning_effort")
+
+            # Also make sure temperature isn't accidentally added.
+            kwargs.pop("temperature", None)
+
             return client.chat.completions.create(**kwargs)
+
         raise
 
 
