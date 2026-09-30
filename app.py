@@ -311,7 +311,7 @@ GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 # Shown on the assistant screen. A deployed app otherwise gives no way to tell
 # which build is actually running, which is the difference between "the code is
 # wrong" and "the old build is still being served". Bump this on every deploy.
-APP_BUILD = "2026-09-30-assistant-diagnosis"
+APP_BUILD = "2026-09-30-reasoning-fix"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
@@ -333,7 +333,7 @@ GROQ_REASONING_MODELS = frozenset({
 # assistant could never answer at all once GROQ_MODEL was pointed at, say,
 # llama-3.3-70b-versatile. The parameter is therefore only attached for models
 # in this list, and is dropped automatically if the API rejects it anyway.
-GROQ_REASONING_MODELS = frozenset()
+
 
 # Streamlit Community Cloud has generous but finite CPU; a hung socket must
 # fail into the retry loop instead of freezing the page for minutes.
@@ -359,45 +359,60 @@ def _is_unsupported_param_error(exc):
         or "unknown" in text
     )
 
-
 def _chat_completion(client, messages, max_tokens, temperature):
-    """One chat completion with GPT-OSS reasoning support.
+    """Send a chat completion to Groq.
 
-    Sends reasoning_effort only when the configured model is a reasoning model.
-    If Groq rejects reasoning_effort, retries the same request without it.
+    GPT-OSS uses reasoning tokens internally. We explicitly keep reasoning
+    low, hide the reasoning output, and give the model enough completion
+    tokens to produce a visible answer.
     """
 
     kwargs = {
         "model": GROQ_MODEL,
         "messages": messages,
-        "max_tokens": max_tokens,
+        "max_completion_tokens": max(max_tokens, 2048),
+        "temperature": temperature,
     }
 
-    # Only send temperature to non-reasoning models.
-    # GPT-OSS uses reasoning_effort instead.
-    if GROQ_MODEL not in GROQ_REASONING_MODELS:
-        kwargs["temperature"] = temperature
-
-    # GPT-OSS reasoning models
+    # Only reasoning models accept these two parameters.
     if GROQ_MODEL in GROQ_REASONING_MODELS:
         kwargs["reasoning_effort"] = GROQ_REASONING_EFFORT
+        kwargs["include_reasoning"] = False
 
     try:
-        return client.chat.completions.create(**kwargs)
+        response = client.chat.completions.create(**kwargs)
+
+        # Debug information stored in session state so we can see exactly
+        # what Groq returned if something goes wrong.
+        try:
+            choice = response.choices[0]
+
+            finish_reason = getattr(choice, "finish_reason", None)
+            message = getattr(choice, "message", None)
+
+            content = getattr(message, "content", None) if message else None
+
+            st.session_state.ai_debug_finish_reason = str(
+                finish_reason or ""
+            )
+
+            st.session_state.ai_debug_content_len = len(
+                (content or "").strip()
+            )
+
+            st.session_state.ai_debug_response = str(response)[:3000]
+
+        except Exception as debug_exc:
+            st.session_state.ai_debug_response = (
+                f"Could not inspect Groq response: {debug_exc}"
+            )
+
+        return response
 
     except Exception as exc:
-        # If Groq rejects reasoning_effort, retry without it.
-        if (
-            "reasoning_effort" in kwargs
-            and _is_unsupported_param_error(exc)
-        ):
-            kwargs.pop("reasoning_effort")
-
-            # Also make sure temperature isn't accidentally added.
-            kwargs.pop("temperature", None)
-
-            return client.chat.completions.create(**kwargs)
-
+        st.session_state.ai_debug_response = (
+            f"Groq chat completion exception: {type(exc).__name__}: {exc}"
+        )
         raise
 
 
