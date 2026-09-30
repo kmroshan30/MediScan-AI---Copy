@@ -311,7 +311,7 @@ GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 # Shown on the assistant screen. A deployed app otherwise gives no way to tell
 # which build is actually running, which is the difference between "the code is
 # wrong" and "the old build is still being served". Bump this on every deploy.
-APP_BUILD = "2026-09-30-reasoning-fix"
+APP_BUILD = "2026-09-30-debug"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
@@ -444,7 +444,13 @@ def _is_worth_retrying(exc):
         return False
     return True
 
-
+def _dbg(msg):
+    try:
+        import resource
+        mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        print(f"[dbg] {msg} | peak {mb:.0f} MB", flush=True)
+    except Exception:
+        print(f"[dbg] {msg}", flush=True)
 def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
     """Call Groq and return reply text, retrying if the model returns nothing.
 
@@ -456,6 +462,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
     caller always gets displayable text.
     """
     last_error = None
+    _dbg("ask_groq start")
     if not GROQ_API_KEY:
         # Guarded rather than left to the SDK: Groq(api_key=None) raises, and
         # that message ("No api_key") does not say where the key should go.
@@ -474,6 +481,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
                 temperature,
             )
             reply = (response.choices[0].message.content or "").strip()
+            _dbg(f"groq replied {len(reply)} chars")
             st.session_state.ai_last_reply_len = len(reply)
             st.session_state.ai_last_stage = f"got_reply({len(reply)} chars)"
             if reply:
@@ -484,6 +492,7 @@ def ask_groq(messages, max_tokens=600, temperature=0.4, attempts=3):
             last_error = RuntimeError("model returned an empty reply")
         except Exception as exc:  # network hiccup, rate limit, bad key, ...
             last_error = exc
+            _dbg(f"groq error {type(exc).__name__}: {exc}")
             if not _is_worth_retrying(exc):
                 # Repeating the same call cannot fix a rejected key, and a
                 # short pause between the other retries stops a rate limit from
@@ -2871,8 +2880,11 @@ with st.sidebar:
 # script: st.stop() here would blank every page, including the AI Assistant,
 # and the real cause (a scikit-learn version that cannot unpickle the saved
 # pipeline) is easy to miss. Report it and carry on with model = None.
+@st.cache_resource
+def load_triage_model(path):
+    return joblib.load(path)
 try:
-    model = joblib.load(MODEL_PATH)
+    model = load_triage_model(MODEL_PATH)
 except Exception as e:
     model = None
     st.error(
