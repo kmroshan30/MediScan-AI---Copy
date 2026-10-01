@@ -311,7 +311,7 @@ GROQ_API_KEY, GROQ_KEY_SOURCE, GROQ_KEY_PROBLEM = _read_groq_key()
 # Shown on the assistant screen. A deployed app otherwise gives no way to tell
 # which build is actually running, which is the difference between "the code is
 # wrong" and "the old build is still being served". Bump this on every deploy.
-APP_BUILD = "2026-09-30-debug"
+APP_BUILD = "2026-10-01-chat-fix"
 
 GROQ_MODEL = "openai/gpt-oss-20b"  # verify against Groq's current model list
 
